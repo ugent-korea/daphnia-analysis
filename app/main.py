@@ -11,7 +11,6 @@ if "GOOGLE_SERVICE_ACCOUNT_JSON" not in os.environ and "GOOGLE_SERVICE_ACCOUNT_J
     os.environ["GOOGLE_SHEET_ID"] = st.secrets["GOOGLE_SHEET_ID"]
     os.environ["DB_PATH"] = DB_PATH
 
-# --- create DB if missing ---
 if not os.path.exists(DB_PATH):
     st.warning("Database not found. Running ETL refresh... this may take ~20s")
     from etl import refresh
@@ -20,9 +19,19 @@ if not os.path.exists(DB_PATH):
     except Exception as e:
         st.error(f"ETL failed: {e}")
         raise
-    # clear caches so new DB will be picked up
     st.cache_resource.clear()
     st.cache_data.clear()
+
+# sanity check after ETL
+if not os.path.exists(DB_PATH):
+    st.error("Database still missing after ETL.")
+else:
+    # peek into DB
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = [r[0] for r in cur.fetchall()]
+    st.info(f"DB check: found tables = {tables}")
+    conn.close()
 
 # --- connection with sanity check ---
 @st.cache_resource
