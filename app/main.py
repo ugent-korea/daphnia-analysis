@@ -143,8 +143,6 @@ def get_children_ids(parent_full_id: str):
     return get_data()["children_by_origin"].get(parent_full_id, [])
 
 # ---------------- TEAM 2.0 generation rules ----------------
-ID_RE_TOP = re.compile(r'^([A-Za-z]+)\.?(\d+)(?:$|_)')
-
 def _parse_core(core: str):
     core = canonical_core(core)           # force dotted
     parts = core.split('.')
@@ -175,28 +173,57 @@ def _next_generation_for_set_cached(set_word: str) -> str:
     max_gen = data["set_max_gen"].get(set_word, 1)
     return f"{set_word}.{max_gen + 1}"
 
+def _alive_count_in_set(set_word: str) -> int:
+    """Count rows with status == 'Alive' (case-insensitive) within the same set."""
+    data = get_data()
+    cnt = 0
+    for row in data["by_full"].values():
+        if (row.get("set_label") or "").upper() == set_word.upper():
+            if str(row.get("status", "")).strip().lower() == "alive":
+                cnt += 1
+    return cnt
+
 def compute_child_and_discard(parent_row, child_ids):
-    # parent_row["mother_id"] may be legacy like 'E1_0804' — normalize core
+    """
+    Final behavior:
+      - Founder E.1 → suggest next top-level generation E.(max+1)
+      - Any other parent:
+          * 1st child → discard
+          * 2nd child → discard if AliveCount(set)==>10, else keep
+          * 3rd child → keep
+          * 4th+ child → mint next top-level generation E.(max+1)
+    """
+    # normalize the parent's core (strip date, enforce dotted)
     parent_core_raw = parent_row["mother_id"].split('_')[0]
     set_word, gen, path = _parse_core(parent_core_raw)
     parent_core = _format_core(set_word, gen, path)
 
+    # Special case: E.1 only
+    if gen == 1 and len(path) == 0:
+        new_core = _next_generation_for_set_cached(set_word)  # e.g., 'E.5'
+        return new_core, False, f"Founder {set_word}.1 → next generation {new_core}."
+
+    # Everyone else
     next_idx = _next_child_index(parent_core, child_ids)
 
-    if len(path) == 0:
-        suggested_core = _format_core(set_word, gen, [next_idx])
-        label = "Founder" if gen == 1 else "Top-level"
-        return suggested_core, False, f"{label} {set_word}.{gen}: next brood={next_idx}."
+    if next_idx == 1:
+        suggested_core = f"{parent_core}.1"
+        return suggested_core, True, f"{parent_core}: 1st subbrood → discard."
 
-    if next_idx <= 3:
-        suggested_core = _format_core(set_word, gen, path + [next_idx])
-        discard = next_idx in (1, 2)   # 1st & 2nd subbroods discarded; 3rd kept
-        note = "discard (1st/2nd)" if discard else "keep (3rd)"
-        return suggested_core, discard, f"{parent_core} subbrood {next_idx}: {note}."
-    else:
-        # 4th+ subbrood → becomes a NEW generation founder for this set
-        new_gen = _next_generation_for_set_cached(set_word)  # e.g. 'E.5'
-        return new_gen, False, f"{parent_core} subbrood {next_idx} → new generation {new_gen}."
+    if next_idx == 2:
+        alive_cnt = _alive_count_in_set(set_word)
+        discard2 = alive_cnt > 10
+        suggested_core = f"{parent_core}.2"
+        reason = " (>10 Alive in set)" if discard2 else " (Alive ≤ 10)"
+        return suggested_core, discard2, f"{parent_core}: 2nd subbrood → {'discard' if discard2 else 'keep'}{reason}. AliveCount={alive_cnt}"
+
+    if next_idx == 3:
+        suggested_core = f"{parent_core}.3"
+        return suggested_core, False, f"{parent_core}: 3rd subbrood → keep (use for experiments)."
+
+    # 4th and beyond: mint a new top-level generation
+    new_core = _next_generation_for_set_cached(set_word)
+    return new_core, False, f"{parent_core}: {next_idx}th subbrood → new generation {new_core}."
 
 # ---------------- Utilities ----------------
 def today_suffix(tz="Asia/Seoul") -> str:
@@ -206,7 +233,6 @@ def last_refresh_kst(meta) -> str:
     ts = (meta or {}).get("last_refresh")
     if not ts:
         return "unknown"
-    # handle "Z" and "+00:00" forms
     s = ts.replace("Z", "+00:00")
     try:
         dt = datetime.datetime.fromisoformat(s)
@@ -215,14 +241,14 @@ def last_refresh_kst(meta) -> str:
     except Exception:
         return ts  # fallback
 
-
 # ---------------- UI ----------------
 def main():
-    # --- put this at the top of main(), before any calls to get_data()/load_meta ---
-    with st.sidebar:
-        if st.button("🔄 Refresh data now", use_container_width=True):
-            load_all.clear()  # bust the KST-day cache
-            st.rerun()  # reload the app so fresh data is used
+    # Top-right refresh button (not sidebar)
+    c1, c_spacer, c2 = st.columns([1, 6, 1])
+    with c2:
+        if st.button("🔄 Refresh data", use_container_width=True):
+            load_all.clear()   # bust the KST-day cache
+            st.rerun()         # reload the app so fresh data is used
 
     st.title("Daphnia Magna TEAM 2.0")
     st.title("Daphnia Coding Protocol")
@@ -230,7 +256,7 @@ def main():
     meta = get_data()["meta"]  # from daily cache
     st.caption(
         f"Last refresh (KST): {last_refresh_kst(meta)} • "
-        f"rows: {meta.get('row_count','?')} • schema: Daphnia Magna"
+        f"rows: {meta.get('row_count','?')} • schema: Daphnia Broods"
     )
 
     mother_input = st.text_input(
