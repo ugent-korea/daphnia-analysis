@@ -2,7 +2,7 @@ import os, sqlite3, re, datetime
 import pandas as pd
 import streamlit as st
 
-DB_PATH = os.environ.get("DB_PATH", "data/app.db")
+DB_PATH = os.environ.get("DB_PATH", "data/database.db")
 
 @st.cache_resource
 def get_conn():
