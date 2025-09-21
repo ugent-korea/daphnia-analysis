@@ -3,8 +3,35 @@
 </p>
 
 <h1 align="center">Daphnia Coding Protocol</h1>
+<p align="center">
+  <a href="https://www.python.org/">
+    <img alt="Python" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
+  </a>
+  <a href="https://streamlit.io/">
+    <img alt="Streamlit" src="https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white">
+  </a>
+  <a href="https://pandas.pydata.org/">
+    <img alt="pandas" src="https://img.shields.io/badge/pandas-Data-150458?logo=pandas&logoColor=white">
+  </a>
+  <a href="https://docs.sqlalchemy.org/">
+    <img alt="SQLAlchemy" src="https://img.shields.io/badge/SQLAlchemy-ORM-D71F00">
+  </a>
+  <a href="https://www.postgresql.org/">
+    <img alt="PostgreSQL (Neon)" src="https://img.shields.io/badge/PostgreSQL-Neon-4169E1?logo=postgresql&logoColor=white">
+  </a>
+  <a href="https://developers.google.com/sheets/api">
+    <img alt="Google Sheets" src="https://img.shields.io/badge/Google%20Sheets-ETL-34A853?logo=googlesheets&logoColor=white">
+  </a>
+  <a href="https://github.com/features/actions">
+    <img alt="GitHub Actions" src="https://img.shields.io/badge/GitHub%20Actions-Scheduler-2088FF?logo=githubactions&logoColor=white">
+  </a>
+  <a href="https://streamlit.io/cloud">
+    <img alt="Hosted on Streamlit Cloud" src="https://img.shields.io/badge/Hosted%20on-Streamlit%20Cloud-FF4B4B?logo=streamlit&logoColor=white">
+  </a>
+</p>
 <p align="center"><sub>by <a href="https://github.com/chaerheeon">@chaerheeon</a></sub></p>
 
+---
 
 ## Quick Start
 1. [**Open the app.**](https://daphnia-coding-protocol.streamlit.app/) 
