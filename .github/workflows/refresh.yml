@@ -8,7 +8,6 @@ on:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
 
@@ -18,13 +17,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install deps
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
-      - name: Run ETL (refresh DB)
+      - name: Run ETL (to Neon)
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          DB_PATH: data/database.db
-        run: |
-          python etl/refresh.py
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python etl/refresh.py

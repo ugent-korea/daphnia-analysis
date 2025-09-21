@@ -1,31 +1,37 @@
-import os, sqlite3, re, datetime
+import os, re, datetime
 import pandas as pd
 import streamlit as st
+from sqlalchemy import create_engine, text
 
-DB_PATH = os.environ.get("DB_PATH", "data/database.db")
+DB_URL = os.environ.get("DATABASE_URL")  # e.g., neon url with sslmode=require
+if not DB_URL:
+    st.stop()  # or raise
 
 @st.cache_resource
-def get_conn():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+def get_engine():
+    # Pool pre_ping avoids stale connections in serverless
+    return create_engine(DB_URL, pool_pre_ping=True)
 
 @st.cache_data(ttl=300)
 def load_meta():
-    conn = get_conn()
+    eng = get_engine()
     try:
-        cur = conn.execute("SELECT k,v FROM meta")
-        return dict(cur.fetchall())
+        with eng.connect() as conn:
+            rows = conn.execute(text("SELECT k, v FROM meta")).all()
+        return {k: v for k, v in rows}
     except Exception:
         return {}
 
 @st.cache_data(ttl=300)
 def get_mother_row(mother_id):
-    conn = get_conn()
-    q = """
-    SELECT mother_id,hierarchy_id,origin_mother_id,n_i,birth_date,death_date,
-           n_f,total_broods,status,notes,set_label,assigned_person
-    FROM mothers WHERE mother_id = ?
-    """
-    row = conn.execute(q, (mother_id,)).fetchone()
+    eng = get_engine()
+    q = text("""
+        SELECT mother_id,hierarchy_id,origin_mother_id,n_i,birth_date,death_date,
+               n_f,total_broods,status,notes,set_label,assigned_person
+        FROM mothers WHERE mother_id = :mid
+    """)
+    with eng.connect() as conn:
+        row = conn.execute(q, {"mid": mother_id}).fetchone()
     if not row:
         return None
     cols = ["mother_id","hierarchy_id","origin_mother_id","n_i","birth_date","death_date",
@@ -34,9 +40,10 @@ def get_mother_row(mother_id):
 
 @st.cache_data(ttl=300)
 def get_children_ids(mother_id):
-    conn = get_conn()
-    q = "SELECT mother_id FROM mothers WHERE origin_mother_id = ?"
-    return [r[0] for r in conn.execute(q, (mother_id,)).fetchall()]
+    eng = get_engine()
+    q = text("SELECT mother_id FROM mothers WHERE origin_mother_id = :mid")
+    with eng.connect() as conn:
+        return [r[0] for r in conn.execute(q, {"mid": mother_id}).all()]
 
 def compute_child_and_discard(parent_mother_row, child_ids):
     parent_prefix = str(parent_mother_row["mother_id"]).split("_")[0]
@@ -103,10 +110,7 @@ def main():
             st.json(parent)
 
         with st.expander("Existing children (origin = this MotherID)"):
-            if children:
-                st.write(children)
-            else:
-                st.write("None")
+            st.write(children if children else "None")
 
 if __name__ == "__main__":
     main()
