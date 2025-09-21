@@ -5,6 +5,7 @@
 <h1 align="center">Daphnia Coding Protocol</h1>
 <p align="center"><sub>by <a href="https://github.com/chaerheeon">@chaerheeon</a></sub></p>
 
+---
 
 ## Quick Start
 1. [**Open the app.**](https://daphnia-coding-protocol.streamlit.app/) 
