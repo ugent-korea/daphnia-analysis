@@ -1,8 +1,15 @@
 import os, sqlite3, re, datetime
 import pandas as pd
+from zoneinfo import ZoneInfo
 import streamlit as st
 
 DB_PATH = os.environ.get("DB_PATH", "data/database.db")
+
+if not os.path.exists(DB_PATH):
+    import streamlit as st
+    st.warning("Database not found. Running ETL refresh... this may take ~10–20s")
+    from etl import refresh
+    refresh.main()
 
 @st.cache_resource
 def get_conn():
@@ -37,6 +44,14 @@ def get_children_ids(mother_id):
     conn = get_conn()
     q = "SELECT mother_id FROM mothers WHERE origin_mother_id = ?"
     return [r[0] for r in conn.execute(q, (mother_id,)).fetchall()]
+
+def to_kst(dt_str: str):
+    """Convert an ISO8601 UTC timestamp string to KST datetime string."""
+    try:
+        utc_dt = datetime.datetime.fromisoformat(dt_str)
+        return utc_dt.astimezone(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S %Z")
+    except Exception:
+        return dt_str
 
 def compute_child_and_discard(parent_mother_row, child_ids):
     parent_prefix = str(parent_mother_row["mother_id"]).split("_")[0]
@@ -74,7 +89,7 @@ def compute_child_and_discard(parent_mother_row, child_ids):
 def main():
     st.title("Mother → Child ID (compute on read)")
     meta = load_meta()
-    st.caption(f"Last refresh (UTC): {meta.get('last_refresh','unknown')} • rows: {meta.get('row_count','?')} • schema: {meta.get('schema','mothers')}")
+    st.caption(f"Last refresh (UTC): {meta.get('last_refresh', 'unknown')} • rows: {meta.get('row_count', '?')} • schema: {meta.get('schema', 'mothers')}")
 
     mother_input = st.text_input("Enter MotherID", placeholder="e.g., E.1_0804").strip()
     date_append = st.text_input("Optional date suffix (_MMDD)", value=datetime.datetime.now().strftime("_%m%d"))

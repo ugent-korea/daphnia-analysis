@@ -3,7 +3,7 @@ name: Refresh Database
 on:
   schedule:
     - cron: "0 15 * * *"   # 12 AM KST daily
-  workflow_dispatch:
+  workflow_dispatch:        # allow manual runs too
 
 jobs:
   refresh:
@@ -11,11 +11,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install deps
         run: |
@@ -28,3 +30,10 @@ jobs:
           DB_PATH: data/database.db
         run: |
           python etl/refresh.py
+
+      - name: Dummy commit to trigger Streamlit redeploy
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: trigger redeploy at $(date -u)"
+          git push
