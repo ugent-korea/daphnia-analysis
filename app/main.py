@@ -1,25 +1,56 @@
-import os, re, datetime
+import os, re, base64, datetime
 from collections import defaultdict
 from zoneinfo import ZoneInfo
 
 import streamlit as st
 from sqlalchemy import create_engine, text
 
-# ---------------- DB bootstrap ----------------
-DB_URL = os.environ.get("DATABASE_URL")
-if not DB_URL:
-    st.error("DATABASE_URL not configured in Streamlit Secrets / env.")
-    st.stop()
-
-# --- BRANDING: title + favicon ---
+# ========= BRANDING: page config (must be the FIRST Streamlit call) =========
 APP_DIR = os.path.dirname(__file__)
 ICON_PATH = os.path.join(APP_DIR, "assets", "daphnia.svg")
 
 st.set_page_config(
-    page_title="Daphnia Coding Protocol",  # browser tab title
-    page_icon=ICON_PATH,                   # favicon (your SVG)
-    layout="wide"
+    page_title="Daphnia Coding Protocol",
+    page_icon=ICON_PATH,
+    layout="wide",
 )
+
+# ========= Translucent background using your local SVG =========
+def set_faded_bg_from_svg(svg_path: str, overlay_alpha: float = 0.82):
+    """Apply a page background (your SVG) with a translucent white overlay for readability."""
+    with open(svg_path, "r", encoding="utf-8") as f:
+        svg = f.read()
+    b64 = base64.b64encode(svg.encode("utf-8")).decode()
+    st.markdown(
+        f"""
+        <style>
+        /* Let background show through header; tighten top padding */
+        [data-testid="stHeader"] {{ background: transparent; }}
+        .block-container {{ padding-top: 1rem; max-width: 900px; margin: 0 auto; }}
+
+        .stApp {{
+          background-image:
+            linear-gradient(rgba(255,255,255,{overlay_alpha}), rgba(255,255,255,{overlay_alpha})),
+            url("data:image/svg+xml;base64,{b64}");
+          background-size: cover;
+          background-position: center;
+          background-repeat: no-repeat;
+          background-attachment: fixed;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+set_faded_bg_from_svg(ICON_PATH, overlay_alpha=0.85)
+
+# ========================= DB bootstrap (no Streamlit calls here) =========================
+DB_URL = os.environ.get("DATABASE_URL")
+
+def _ensure_db_or_stop():
+    if not DB_URL:
+        st.error("DATABASE_URL not configured in Streamlit Secrets / env.")
+        st.stop()
 
 @st.cache_resource
 def get_engine():
@@ -254,7 +285,6 @@ def last_refresh_kst(meta) -> str:
 
 # ---------------- UI ----------------
 def main():
-    st.image(ICON_PATH, width=160)  # ~160–200 is a good range for a logo
     st.title("Daphnia Coding Protocol")
     st.markdown("### Daphnia Magna TEAM 2.0")
 
