@@ -142,7 +142,7 @@ def get_mother_row(user_input: str):
 def get_children_ids(parent_full_id: str):
     return get_data()["children_by_origin"].get(parent_full_id, [])
 
-# ---------------- TEAM 2.0 generation rules ----------------
+# ---------------- Final rules (A1 special; others use discard/keep/reset) ----------------
 def _parse_core(core: str):
     core = canonical_core(core)           # force dotted
     parts = core.split('.')
@@ -185,25 +185,26 @@ def _alive_count_in_set(set_word: str) -> int:
 
 def compute_child_and_discard(parent_row, child_ids):
     """
-    Final behavior:
-      - Founder E.1 → suggest next top-level generation E.(max+1)
-      - Any other parent:
-          * 1st child → discard
-          * 2nd child → discard if AliveCount(set)==>10, else keep
-          * 3rd child → keep
-          * 4th+ child → mint next top-level generation E.(max+1)
+    A1 special:
+      - If parent is exactly X.1, just suggest X.1.<k> (no discard/reset on A1 itself).
+    Everyone else (any parent not exactly X.1):
+      - 1st child → discard
+      - 2nd child → discard if Alive(set) > 10, else keep
+      - 3rd child → keep (experiments)
+      - 4th+ child → RESET to next top-level X.(max+1)
     """
     # normalize the parent's core (strip date, enforce dotted)
     parent_core_raw = parent_row["mother_id"].split('_')[0]
     set_word, gen, path = _parse_core(parent_core_raw)
     parent_core = _format_core(set_word, gen, path)
 
-    # Special case: E.1 only
+    # A1 special: no discard/reset; children are A1.k
     if gen == 1 and len(path) == 0:
-        new_core = _next_generation_for_set_cached(set_word)  # e.g., 'E.5'
-        return new_core, False, f"Founder {set_word}.1 → next generation {new_core}."
+        next_idx = _next_child_index(parent_core, child_ids)
+        suggested_core = f"{parent_core}.{next_idx}"
+        return suggested_core, False, f"Founder {set_word}.1: next brood={next_idx} (no discard/reset on founder)."
 
-    # Everyone else
+    # Everyone else:
     next_idx = _next_child_index(parent_core, child_ids)
 
     if next_idx == 1:
@@ -221,9 +222,9 @@ def compute_child_and_discard(parent_row, child_ids):
         suggested_core = f"{parent_core}.3"
         return suggested_core, False, f"{parent_core}: 3rd subbrood → keep (use for experiments)."
 
-    # 4th and beyond: mint a new top-level generation
+    # 4th and beyond → new top-level generation
     new_core = _next_generation_for_set_cached(set_word)
-    return new_core, False, f"{parent_core}: {next_idx}th subbrood → new generation {new_core}."
+    return new_core, False, f"{parent_core}: {next_idx}th subbrood → RESET to new generation {new_core}."
 
 # ---------------- Utilities ----------------
 def today_suffix(tz="Asia/Seoul") -> str:
@@ -243,13 +244,6 @@ def last_refresh_kst(meta) -> str:
 
 # ---------------- UI ----------------
 def main():
-    # Top-right refresh button (not sidebar)
-    c1, c_spacer, c2 = st.columns([1, 6, 1])
-    with c2:
-        if st.button("🔄 Refresh data", use_container_width=True):
-            load_all.clear()   # bust the KST-day cache
-            st.rerun()         # reload the app so fresh data is used
-
     st.title("Daphnia Magna TEAM 2.0")
     st.title("Daphnia Coding Protocol")
 
@@ -290,7 +284,11 @@ def main():
         st.subheader("Result")
         st.write(f"**Set:** {set_label} • **Assignee:** {assigned}")
         st.success(f"**Suggested Child ID:** {final_child}")
-        st.write(f"**Discard?** {'Yes' if should_discard else 'No'}")
+        if should_discard:
+            st.error("Discard? Yes")
+        else:
+            st.write("**Discard?** No")
+
         st.caption(basis)
 
         with st.expander("Parent details"):
