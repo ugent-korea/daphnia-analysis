@@ -6,10 +6,12 @@ import streamlit as st
 DB_PATH = os.environ.get("DB_PATH", "data/database.db")
 
 if not os.path.exists(DB_PATH):
-    import streamlit as st
     st.warning("Database not found. Running ETL refresh... this may take ~10–20s")
     from etl import refresh
     refresh.main()
+    st.cache_resource.clear()
+    st.cache_data.clear()
+
 
 @st.cache_resource
 def get_conn():
@@ -89,7 +91,9 @@ def compute_child_and_discard(parent_mother_row, child_ids):
 def main():
     st.title("Mother → Child ID (compute on read)")
     meta = load_meta()
-    st.caption(f"Last refresh (UTC): {meta.get('last_refresh', 'unknown')} • rows: {meta.get('row_count', '?')} • schema: {meta.get('schema', 'mothers')}")
+    last_refresh = meta.get("last_refresh", "unknown")
+    last_refresh_kst = to_kst(last_refresh) if last_refresh != "unknown" else "unknown"
+    st.caption(f"Last refresh (KST): {last_refresh_kst} • rows: {meta.get('row_count', '?')} • schema: {meta.get('schema', 'mothers')}")
 
     mother_input = st.text_input("Enter MotherID", placeholder="e.g., E.1_0804").strip()
     date_append = st.text_input("Optional date suffix (_MMDD)", value=datetime.datetime.now().strftime("_%m%d"))
