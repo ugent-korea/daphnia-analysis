@@ -9,8 +9,14 @@ if not os.path.exists(DB_PATH):
     st.warning("Database not found. Running ETL refresh... this may take ~10–20s")
     from etl import refresh
     refresh.main()
-    st.cache_resource.clear()
-    st.cache_data.clear()
+
+# 🔑 ensure caches are reset and DB actually exists
+st.cache_resource.clear()
+st.cache_data.clear()
+
+if not os.path.exists(DB_PATH):
+    st.error(f"ETL did not create the database at {DB_PATH}")
+
 
 
 @st.cache_resource
