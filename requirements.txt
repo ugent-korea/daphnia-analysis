@@ -1,3 +1,5 @@
 pandas
 gspread
 google-auth
+psycopg[binary]
+SQLAlchemy>=2.0

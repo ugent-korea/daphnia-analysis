@@ -1,33 +1,21 @@
-import os, sys, sqlite3, pandas as pd
+import os, sys
+import pandas as pd
+from sqlalchemy import create_engine, text
 
-# Default database path
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_DB = os.path.join(BASE_DIR, "data", "database.db")
-
-# Allow override from command line
-db_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_DB
+DB_URL = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("DATABASE_URL")
 mother = sys.argv[2] if len(sys.argv) > 2 else None
+if not DB_URL:
+    print("❌ DATABASE_URL not provided"); sys.exit(1)
 
-# Expand relative path to absolute
-db_path = os.path.abspath(db_path)
+eng = create_engine(DB_URL, pool_pre_ping=True)
 
-print(f"DB: {db_path}")
-
-if not os.path.exists(db_path):
-    print(f"❌ Database file not found at {db_path}")
-    sys.exit(1)
-
-# Connect to DB
-con = sqlite3.connect(db_path)
-
-def q(sql):
-    try:
-        return pd.read_sql(sql, con)
-    except Exception as e:
-        print("Query error:", e)
+def q(sql, **params):
+    with eng.connect() as conn:
+        return pd.read_sql(text(sql), conn, params=params)
 
 print("\nTables:")
-print(q("SELECT name FROM sqlite_master WHERE type='table'"))
+print(q("""SELECT table_name FROM information_schema.tables
+          WHERE table_schema='public' ORDER BY table_name"""))
 
 print("\nRow count in mothers:")
 print(q("SELECT COUNT(*) as n FROM mothers"))
@@ -36,12 +24,11 @@ print("\nSample rows from mothers:")
 print(q("SELECT mother_id,set_label,assigned_person,status FROM mothers LIMIT 10"))
 
 print("\nCounts by assignee:")
-print(q("SELECT set_label,assigned_person,COUNT(*) AS n "
-       "FROM mothers GROUP BY set_label,assigned_person ORDER BY set_label,assigned_person"))
+print(q("""SELECT set_label,assigned_person,COUNT(*) AS n
+          FROM mothers GROUP BY set_label,assigned_person
+          ORDER BY set_label,assigned_person"""))
 
 if mother:
     print(f"\nChildren of {mother}:")
-    print(q(f"SELECT mother_id FROM mothers "
-            f"WHERE origin_mother_id='{mother}' ORDER BY mother_id"))
-
-con.close()
+    print(q("""SELECT mother_id FROM mothers
+              WHERE origin_mother_id=:m ORDER BY mother_id""", m=mother))
