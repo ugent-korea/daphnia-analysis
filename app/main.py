@@ -243,13 +243,6 @@ def last_refresh_kst(meta) -> str:
 
 # ---------------- UI ----------------
 def main():
-    # Top-right refresh button (not sidebar)
-    c1, c_spacer, c2 = st.columns([1, 6, 1])
-    with c2:
-        if st.button("🔄 Refresh data", use_container_width=True):
-            load_all.clear()   # bust the KST-day cache
-            st.rerun()         # reload the app so fresh data is used
-
     st.title("Daphnia Magna TEAM 2.0")
     st.title("Daphnia Coding Protocol")
 
