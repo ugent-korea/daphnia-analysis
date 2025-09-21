@@ -254,13 +254,9 @@ def last_refresh_kst(meta) -> str:
 
 # ---------------- UI ----------------
 def main():
-    hc1, hc2 = st.columns([1, 4])
-    with hc1:
-        # If SVG doesn’t render on your Streamlit version, see the fallback below.
-        st.image(ICON_PATH, use_column_width=True)
-    with hc2:
-        st.title("Daphnia Coding Protocol")
-        st.markdown("### Daphnia Magna TEAM 2.0")
+    st.image(ICON_PATH, width=160)  # ~160–200 is a good range for a logo
+    st.title("Daphnia Coding Protocol")
+    st.markdown("### Daphnia Magna TEAM 2.0")
 
     meta = get_data()["meta"]  # from daily cache
     st.caption(
