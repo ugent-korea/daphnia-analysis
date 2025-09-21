@@ -5,23 +5,34 @@ import streamlit as st
 
 DB_PATH = os.environ.get("DB_PATH", "data/database.db")
 
+# --- ensure ETL has credentials from st.secrets if not already in env ---
+if "GOOGLE_SERVICE_ACCOUNT_JSON" not in os.environ and "GOOGLE_SERVICE_ACCOUNT_JSON" in st.secrets:
+    os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"] = st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"]
+    os.environ["GOOGLE_SHEET_ID"] = st.secrets["GOOGLE_SHEET_ID"]
+    os.environ["DB_PATH"] = DB_PATH
+
+# --- create DB if missing ---
 if not os.path.exists(DB_PATH):
-    st.warning("Database not found. Running ETL refresh... this may take ~10–20s")
+    st.warning("Database not found. Running ETL refresh... this may take ~20s")
     from etl import refresh
-    refresh.main()
+    try:
+        refresh.main()
+    except Exception as e:
+        st.error(f"ETL failed: {e}")
+        raise
+    # clear caches so new DB will be picked up
+    st.cache_resource.clear()
+    st.cache_data.clear()
 
-# 🔑 ensure caches are reset and DB actually exists
-st.cache_resource.clear()
-st.cache_data.clear()
-
-if not os.path.exists(DB_PATH):
-    st.error(f"ETL did not create the database at {DB_PATH}")
-
-
-
+# --- connection with sanity check ---
 @st.cache_resource
 def get_conn():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = {r[0] for r in cur.fetchall()}
+    if "mothers" not in tables:
+        raise RuntimeError(f"'mothers' table not found in {DB_PATH}. ETL may have failed.")
+    return conn
 
 @st.cache_data(ttl=300)
 def load_meta():
@@ -54,7 +65,7 @@ def get_children_ids(mother_id):
     return [r[0] for r in conn.execute(q, (mother_id,)).fetchall()]
 
 def to_kst(dt_str: str):
-    """Convert an ISO8601 UTC timestamp string to KST datetime string."""
+    """Convert ISO8601 UTC timestamp string to KST display string."""
     try:
         utc_dt = datetime.datetime.fromisoformat(dt_str)
         return utc_dt.astimezone(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -85,21 +96,24 @@ def compute_child_and_discard(parent_mother_row, child_ids):
     should_discard = bool(not_alive or has_death_date)
 
     basis_bits = [f"children={len(child_ids)}", f"conforming_max={max_idx}"]
-    if nonconforming: basis_bits.append(f"nonconforming={nonconforming}")
+    if nonconforming:
+        basis_bits.append(f"nonconforming={nonconforming}")
     if should_discard:
         reasons=[]
         if not_alive: reasons.append(f"status={parent_mother_row.get('status','')}")
         if has_death_date: reasons.append(f"death_date={parent_mother_row.get('death_date','')}")
-        if reasons: basis_bits.append("discard_reasons=" + ";".join(reasons))
+        if reasons:
+            basis_bits.append("discard_reasons=" + ";".join(reasons))
     basis = "; ".join(basis_bits)
     return suggested_child_id, should_discard, basis
 
 def main():
     st.title("Mother → Child ID (compute on read)")
+
     meta = load_meta()
     last_refresh = meta.get("last_refresh", "unknown")
     last_refresh_kst = to_kst(last_refresh) if last_refresh != "unknown" else "unknown"
-    st.caption(f"Last refresh (KST): {last_refresh_kst} • rows: {meta.get('row_count', '?')} • schema: {meta.get('schema', 'mothers')}")
+    st.caption(f"Last refresh (KST): {last_refresh_kst} • rows: {meta.get('row_count','?')} • schema: {meta.get('schema','mothers')}")
 
     mother_input = st.text_input("Enter MotherID", placeholder="e.g., E.1_0804").strip()
     date_append = st.text_input("Optional date suffix (_MMDD)", value=datetime.datetime.now().strftime("_%m%d"))
