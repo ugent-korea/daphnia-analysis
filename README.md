@@ -16,6 +16,8 @@
   <a href="https://docs.sqlalchemy.org/">
     <img alt="SQLAlchemy" src="https://img.shields.io/badge/SQLAlchemy-ORM-D71F00">
   </a>
+</p>
+  <p align="center">
   <a href="https://www.postgresql.org/">
     <img alt="PostgreSQL (Neon)" src="https://img.shields.io/badge/PostgreSQL-Neon-4169E1?logo=postgresql&logoColor=white">
   </a>
@@ -24,9 +26,6 @@
   </a>
   <a href="https://github.com/features/actions">
     <img alt="GitHub Actions" src="https://img.shields.io/badge/GitHub%20Actions-Scheduler-2088FF?logo=githubactions&logoColor=white">
-  </a>
-  <a href="https://streamlit.io/cloud">
-    <img alt="Hosted on Streamlit Cloud" src="https://img.shields.io/badge/Hosted%20on-Streamlit%20Cloud-FF4B4B?logo=streamlit&logoColor=white">
   </a>
 </p>
 <p align="center"><sub>by <a href="https://github.com/chaerheeon">@chaerheeon</a></sub></p>
