@@ -1,9 +1,12 @@
-import json, re, hashlib, sqlite3, time
+import os, json, re, hashlib, sqlite3, time
 from datetime import datetime, timezone
 import pandas as pd
 import gspread
-from app.config import SA_JSON, SHEET_ID, DB_PATH
 from google.oauth2.service_account import Credentials
+
+SA_JSON = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
+SHEET_ID = os.environ["GOOGLE_SHEET_ID"]
+DB_PATH = os.environ.get("DB_PATH", "data/app.db")
 
 TAB_INCLUDE_PATTERN = re.compile(r"^set\s+[a-z]\b", re.IGNORECASE)
 SET_TITLE_RE = re.compile(r"^set\s+([a-z])(?:\s*\(([^)]*)\))?", re.IGNORECASE)
