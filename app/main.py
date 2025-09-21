@@ -11,6 +11,16 @@ if not DB_URL:
     st.error("DATABASE_URL not configured in Streamlit Secrets / env.")
     st.stop()
 
+# --- BRANDING: title + favicon ---
+APP_DIR = os.path.dirname(__file__)
+ICON_PATH = os.path.join(APP_DIR, "assets", "daphnia.svg")
+
+st.set_page_config(
+    page_title="Daphnia Coding Protocol",  # browser tab title
+    page_icon=ICON_PATH,                   # favicon (your SVG)
+    layout="wide"
+)
+
 @st.cache_resource
 def get_engine():
     return create_engine(DB_URL, pool_pre_ping=True)
@@ -244,8 +254,13 @@ def last_refresh_kst(meta) -> str:
 
 # ---------------- UI ----------------
 def main():
-    st.title("Daphnia Magna TEAM 2.0")
-    st.title("Daphnia Coding Protocol")
+    hc1, hc2 = st.columns([1, 4])
+    with hc1:
+        # If SVG doesn’t render on your Streamlit version, see the fallback below.
+        st.image(ICON_PATH, use_column_width=True)
+    with hc2:
+        st.title("Daphnia Coding Protocol")
+        st.markdown("### Daphnia Magna TEAM 2.0")
 
     meta = get_data()["meta"]  # from daily cache
     st.caption(
