@@ -9,7 +9,8 @@ def get_conn():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 @st.cache_data(ttl=300)
-def load_meta(conn):
+def load_meta():
+    conn = get_conn()
     try:
         cur = conn.execute("SELECT k,v FROM meta")
         return dict(cur.fetchall())
@@ -17,20 +18,23 @@ def load_meta(conn):
         return {}
 
 @st.cache_data(ttl=300)
-def get_mother_row(conn, mother_id):
+def get_mother_row(mother_id):
+    conn = get_conn()
     q = """
     SELECT mother_id,hierarchy_id,origin_mother_id,n_i,birth_date,death_date,
            n_f,total_broods,status,notes,set_label,assigned_person
     FROM mothers WHERE mother_id = ?
     """
     row = conn.execute(q, (mother_id,)).fetchone()
-    if not row: return None
+    if not row:
+        return None
     cols = ["mother_id","hierarchy_id","origin_mother_id","n_i","birth_date","death_date",
             "n_f","total_broods","status","notes","set_label","assigned_person"]
     return dict(zip(cols, row))
 
 @st.cache_data(ttl=300)
-def get_children_ids(conn, mother_id):
+def get_children_ids(mother_id):
+    conn = get_conn()
     q = "SELECT mother_id FROM mothers WHERE origin_mother_id = ?"
     return [r[0] for r in conn.execute(q, (mother_id,)).fetchall()]
 
@@ -69,20 +73,19 @@ def compute_child_and_discard(parent_mother_row, child_ids):
 
 def main():
     st.title("Mother → Child ID (compute on read)")
-    conn = get_conn()
-    meta = load_meta(conn)
+    meta = load_meta()
     st.caption(f"Last refresh (UTC): {meta.get('last_refresh','unknown')} • rows: {meta.get('row_count','?')} • schema: {meta.get('schema','mothers')}")
 
     mother_input = st.text_input("Enter MotherID", placeholder="e.g., E.1_0804").strip()
     date_append = st.text_input("Optional date suffix (_MMDD)", value=datetime.datetime.now().strftime("_%m%d"))
 
     if mother_input:
-        parent = get_mother_row(conn, mother_input)
+        parent = get_mother_row(mother_input)
         if not parent:
             st.error("MotherID not found.")
             return
 
-        children = get_children_ids(conn, mother_input)
+        children = get_children_ids(mother_input)
         suggested_prefix, should_discard, basis = compute_child_and_discard(parent, children)
 
         assigned = parent.get("assigned_person","unknown") or "unknown"
