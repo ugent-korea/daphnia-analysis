@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import os
 import streamlit as st
 from app.core import utils
-from app.ui import coder_page
+from app.ui import coder_page, analysis_page
 
 # ========= BRANDING: page config =========
 APP_DIR = os.path.dirname(__file__)
@@ -25,6 +25,7 @@ utils.set_faded_bg_from_svg(
 # ========= Router =========
 PAGES = {
     "Code Generator": coder_page,
+    "Analysis Page": analysis_page,
 }
 
 st.sidebar.title("Navigation")
