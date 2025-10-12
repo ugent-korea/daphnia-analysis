@@ -161,13 +161,19 @@ def _write_records(conn, df: pd.DataFrame):
         return
 
     df = df.reindex(columns=CANON_COLS, fill_value=None)
+
+    # --- Numeric cleanup ---
     for c in ("mortality", "sick"):
-        s = pd.to_numeric(df[c], errors="coerce")
-        df[c] = [None if pd.isna(v) else int(v) for v in s]
+        s = pd.to_numeric(df[c], errors="coerce")  # -> NaN for non-numeric
+        df[c] = [None if pd.isna(v) or v > 2_000_000_000 or v < -2_000_000_000 else int(v) for v in s.fillna(0)]
+
+    # --- Replace NaN / inf safely ---
+    df = df.replace({math.nan: None, "nan": None, "NaN": None})
 
     conn.execute(text("DROP TABLE IF EXISTS records_tmp"))
     conn.execute(text("CREATE TABLE records_tmp (LIKE records INCLUDING ALL)"))
 
+    records = df.to_dict(orient="records")
     conn.execute(
         text(f"""
             INSERT INTO records_tmp(
@@ -176,7 +182,7 @@ def _write_records(conn, df: pd.DataFrame):
               {', '.join(':'+c for c in CANON_COLS)}
             )
         """),
-        df.to_dict(orient="records")
+        records
     )
 
     conn.execute(text("TRUNCATE TABLE records"))
