@@ -36,10 +36,34 @@ def render():
         st.stop()
 
     # ---- Normalize and merge ----
-    records["mother_id"] = records["mother_id"].astype(str).str.strip().str.upper()
-    broods_df["mother_id"] = broods_df["mother_id"].astype(str).str.strip().str.upper()
+    def normalize_id(s):
+        return (
+            s.astype(str)
+            .str.strip()
+            .str.upper()
+            .str.replace(" ", "", regex=False)
+            .str.replace(".", "_", regex=False)
+        )
+
+    records["mother_id"] = normalize_id(records["mother_id"])
+    broods_df["mother_id"] = normalize_id(broods_df["mother_id"])
     broods_df["set_label"] = broods_df["set_label"].astype(str).str.strip().str.upper()
+
     df = records.merge(broods_df, on="mother_id", how="left")
+
+    # ---- Diagnostic check for unmatched IDs ----
+    unmatched = df[df["set_label"].isna()]
+    if not unmatched.empty:
+        st.warning(f"⚠️ {len(unmatched)} records could not be matched to any set.")
+        st.caption("Below are example unmatched mother IDs:")
+        st.dataframe(
+            unmatched[["mother_id", "date", "life_stage", "mortality"]]
+            .sort_values("date")
+            .head(10),
+            use_container_width=True,
+        )
+        missing_keys = set(records["mother_id"]) - set(broods_df["mother_id"])
+        st.text(f"Unmatched mother IDs: {sorted(list(missing_keys))[:15]}")
 
     # ---- Clean columns ----
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
