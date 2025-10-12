@@ -26,7 +26,7 @@ utils.set_faded_bg_from_svg(
 PAGES = {
     "Code Generator": coder_page,
 }
-st.sidebar.image(LOGO_PATH, use_container_width=True)
+st.sidebar.image(LOGO_PATH, use_container_width=True, width=110)
 st.sidebar.title("Navigation")
 selection = st.sidebar.radio("Go to:", list(PAGES.keys()))
 page = PAGES[selection]
