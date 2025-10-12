@@ -24,10 +24,20 @@ def load_all(day_key: str):
     eng = get_engine()
     with eng.connect() as conn:
         moms = conn.execute(text("""
-            SELECT mother_id,hierarchy_id,origin_mother_id,n_i,birth_date,death_date,
-                   n_f,total_broods,status,notes,set_label,assigned_person
-            FROM mothers
-        """)).mappings().all()
+                                 SELECT mother_id,
+                                        hierarchy_id,
+                                        origin_mother_id,
+                                        n_i,
+                                        birth_date,
+                                        death_date,
+                                        n_f,
+                                        total_broods,
+                                        status,
+                                        notes,
+                                        set_label,
+                                        assigned_person
+                                 FROM broods
+                                 """)).mappings().all()
         meta_rows = conn.execute(text("SELECT k,v FROM meta")).all()
         meta = {k: v for k, v in meta_rows}
 
