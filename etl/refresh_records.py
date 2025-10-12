@@ -183,6 +183,16 @@ def _write_records(conn, df: pd.DataFrame):
     conn.execute(text("INSERT INTO records SELECT * FROM records_tmp"))
     conn.execute(text("DROP TABLE records_tmp"))
 
+def _extract_set_info(title):
+    """Extract set label (e.g., 'E') and assigned person from tab title."""
+    m = re.match(r"^set\s+([a-z])(?:\s*\(([^)]*)\))?", title or "", re.IGNORECASE)
+    if not m:
+        return "unknown", "unknown"
+    letter = (m.group(1) or "").upper()
+    person = (m.group(2) or "").strip() or "unknown"
+    return letter, person
+
+
 # ==== Main ====
 def main():
     _log("Start ETL → records + meta (split two-table sheet; left-hand extraction)")
