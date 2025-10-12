@@ -9,6 +9,7 @@ from app.ui import coder_page
 # ========= BRANDING: page config =========
 APP_DIR = os.path.dirname(__file__)
 ICON_PATH = os.path.join(APP_DIR, "assets", "daphnia.svg")
+LOGO_PATH = os.path.join(APP_DIR, "assets", "marine_ugent.png")
 
 st.set_page_config(
     page_title="Daphnia Coding Protocol",
@@ -25,7 +26,7 @@ utils.set_faded_bg_from_svg(
 PAGES = {
     "Code Generator": coder_page,
 }
-
+st.sidebar.image(LOGO_PATH, use_container_width=True)
 st.sidebar.title("Navigation")
 selection = st.sidebar.radio("Go to:", list(PAGES.keys()))
 page = PAGES[selection]
