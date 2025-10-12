@@ -6,7 +6,6 @@ import streamlit as st
 
 DB_URL = os.getenv("DATABASE_URL") or st.secrets.get("DATABASE_URL")
 
-
 def _ensure_db_or_stop():
     if not DB_URL:
         st.error("DATABASE_URL not configured in Streamlit Secrets / env.")

@@ -135,7 +135,7 @@ def _hash_df(df):
 
 def _ensure_schema(conn):
     conn.execute(text("""
-    CREATE TABLE IF NOT EXISTS mothers(
+    CREATE TABLE IF NOT EXISTS broods(
       mother_id TEXT PRIMARY KEY,
       hierarchy_id TEXT,
       origin_mother_id TEXT,
@@ -155,36 +155,23 @@ def _ensure_schema(conn):
       v TEXT NOT NULL
     )"""))
 
-def _sanitize_int_cols(df: pd.DataFrame):
-    # Coerce to real ints or None (no floats/NaN reach Postgres)
+def _write_broods(conn, df: pd.DataFrame):
+    df = df.reindex(columns=CANON_COLS, fill_value=None)
     for c in ("n_i", "n_f", "total_broods"):
         s = pd.to_numeric(df[c], errors="coerce")
         df[c] = [None if pd.isna(v) else int(v) for v in s]
-    return df
 
-def _write_mothers(conn, df: pd.DataFrame):
-    # Ensure expected columns & order
-    df = df.reindex(columns=CANON_COLS, fill_value=None)
+    conn.execute(text("DROP TABLE IF EXISTS broods_tmp"))
+    conn.execute(text("CREATE TABLE broods_tmp (LIKE broods INCLUDING ALL)"))
 
-    # First pass: column-wise sanitize to int/None
-    for c in ("n_i", "n_f", "total_broods"):
-        s = pd.to_numeric(df[c], errors="coerce")  # -> float or NaN
-        df[c] = [None if pd.isna(v) else int(v) for v in s]
-
-    conn.execute(text("DROP TABLE IF EXISTS mothers_tmp"))
-    conn.execute(text("CREATE TABLE mothers_tmp (LIKE mothers INCLUDING ALL)"))
-
-    # Build records and do a final per-record scrub (handles any lingering floats/NaN)
     records = []
     for rec in df.to_dict(orient="records"):
         for c in ("n_i", "n_f", "total_broods"):
             v = rec.get(c)
             if v is None:
                 continue
-            # float NaN → None
             if isinstance(v, float) and math.isnan(v):
                 rec[c] = None
-            # clean floats/strings → int
             elif isinstance(v, float):
                 rec[c] = int(v)
             elif isinstance(v, str) and v.strip() != "":
@@ -192,18 +179,16 @@ def _write_mothers(conn, df: pd.DataFrame):
                     rec[c] = int(float(v))
                 except Exception:
                     rec[c] = None
-            # numpy scalars → python ints
             elif hasattr(v, "item"):
                 try:
                     rec[c] = int(v.item())
                 except Exception:
                     rec[c] = None
-            # else: leave ints as-is
         records.append(rec)
 
     if records:
         conn.execute(text("""
-            INSERT INTO mothers_tmp(
+            INSERT INTO broods_tmp(
               mother_id,hierarchy_id,origin_mother_id,n_i,birth_date,death_date,
               n_f,total_broods,status,notes,set_label,assigned_person
             ) VALUES (
@@ -212,18 +197,18 @@ def _write_mothers(conn, df: pd.DataFrame):
             )
         """), records)
 
-    conn.execute(text("TRUNCATE TABLE mothers"))
+    conn.execute(text("TRUNCATE TABLE broods"))
     conn.execute(text("""
-      INSERT INTO mothers
+      INSERT INTO broods
       SELECT mother_id,hierarchy_id,origin_mother_id,n_i,birth_date,death_date,
              n_f,total_broods,status,notes,set_label,assigned_person
-      FROM mothers_tmp
+      FROM broods_tmp
     """))
-    conn.execute(text("DROP TABLE mothers_tmp"))
+    conn.execute(text("DROP TABLE broods_tmp"))
 
 # ==== Main ====
 def main():
-    _log("Start ETL → mothers + meta (two-table slice; no caching logic)")
+    _log("Start ETL → broods + meta (two-table slice; no caching logic)")
 
     gc = _authorize()
     sh, tabs = _fetch_tabs(gc)
@@ -271,22 +256,22 @@ def main():
 
     frames = [f for f in frames if not f.empty]
 
-    mothers = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=CANON_COLS)
-    mothers = mothers.drop_duplicates(subset=["mother_id"], keep="last")
-    content_hash = _hash_df(mothers)
+    broods = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=CANON_COLS)
+    broods = broods.drop_duplicates(subset=["mother_id"], keep="last")
+    content_hash = _hash_df(broods)
 
     engine = create_engine(DB_URL, pool_pre_ping=True)
     with engine.begin() as conn:
         _ensure_schema(conn)
-        _write_mothers(conn, mothers)
+        _write_broods(conn, broods)
 
         meta = {
             "last_refresh": _now_iso(),
-            "row_count": str(len(mothers)),
+            "row_count": str(len(broods)),
             "included_tabs": json.dumps(included, ensure_ascii=False),
             "source_sheet_id": SHEET_ID,
             "content_hash": content_hash,
-            "schema": "mothers",
+            "schema": "broods",
         }
         for k, v in meta.items():
             conn.execute(text("""
