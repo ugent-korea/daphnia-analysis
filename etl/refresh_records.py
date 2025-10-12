@@ -161,23 +161,36 @@ def _write_records(conn, df: pd.DataFrame):
         return
 
     df = df.reindex(columns=CANON_COLS, fill_value=None)
+
+    # --- numeric cleanup ---
     for c in ("mortality", "sick"):
         s = pd.to_numeric(df[c], errors="coerce")
-        df[c] = [None if pd.isna(v) else int(v) for v in s]
+        df[c] = [None if pd.isna(v) or v > 2_000_000_000 or v < -2_000_000_000 else int(v) for v in s.fillna(0)]
 
+    # --- remove records with invalid mother_id ---
+    valid_ids = {r[0] for r in conn.execute(text("SELECT mother_id FROM broods"))}
+    before = len(df)
+    df = df[df["mother_id"].isin(valid_ids)]
+    dropped = before - len(df)
+    if dropped:
+        _log(f"Skipped {dropped} rows with invalid mother_id not found in broods.")
+
+    # --- continue as before ---
     conn.execute(text("DROP TABLE IF EXISTS records_tmp"))
     conn.execute(text("CREATE TABLE records_tmp (LIKE records INCLUDING ALL)"))
 
-    conn.execute(
-        text(f"""
-            INSERT INTO records_tmp(
-              {', '.join(CANON_COLS)}
-            ) VALUES (
-              {', '.join(':'+c for c in CANON_COLS)}
-            )
-        """),
-        df.to_dict(orient="records")
-    )
+    records = df.to_dict(orient="records")
+    if records:
+        conn.execute(
+            text(f"""
+                INSERT INTO records_tmp(
+                  {', '.join(CANON_COLS)}
+                ) VALUES (
+                  {', '.join(':'+c for c in CANON_COLS)}
+                )
+            """),
+            records
+        )
 
     conn.execute(text("TRUNCATE TABLE records"))
     conn.execute(text("INSERT INTO records SELECT * FROM records_tmp"))
