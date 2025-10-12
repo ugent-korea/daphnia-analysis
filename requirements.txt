@@ -3,3 +3,4 @@ gspread
 google-auth
 psycopg2-binary
 SQLAlchemy>=2.0
+streamlit
