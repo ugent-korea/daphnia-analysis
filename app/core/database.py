@@ -4,7 +4,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, text
 import streamlit as st
 
-DB_URL = os.environ.get("DATABASE_URL")
+DB_URL = os.getenv("DB_URL") or st.secrets.get("DB_URL")
+
 
 def _ensure_db_or_stop():
     if not DB_URL:
