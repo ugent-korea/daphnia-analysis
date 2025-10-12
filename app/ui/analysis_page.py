@@ -20,11 +20,15 @@ def render():
     # ---- Connect and load data ----
     engine = create_engine(DB_URL, pool_pre_ping=True)
     with engine.connect() as conn:
-        df = pd.read_sql(text("SELECT * FROM records"), conn)
+        records = pd.read_sql(text("SELECT * FROM records"), conn)
+        broods = pd.read_sql(text("SELECT mother_id, set_label FROM broods"), conn)
 
-    if df.empty:
+    if records.empty:
         st.warning("No records found in the database.")
         st.stop()
+
+    # ---- Merge to include set_label from broods ----
+    df = records.merge(broods, on="mother_id", how="left")
 
     # ---- Basic cleaning ----
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -38,6 +42,7 @@ def render():
     df["behavior_post"] = df["behavior_post"].fillna("unknown").str.strip().str.lower()
     df["set_label"] = df["set_label"].fillna("unknown").str.upper().str.strip()
 
+    # ---- Create tabs by set ----
     sets = sorted(df["set_label"].unique())
     tabs = st.tabs(["🌍 Cumulative"] + [f"Set {s}" for s in sets])
 
@@ -91,11 +96,7 @@ def show_dashboard(df):
     chart1 = (
         alt.Chart(mortality_trend)
         .mark_line(point=True)
-        .encode(
-            x="date:T",
-            y="mortality:Q",
-            tooltip=["date", "mortality"]
-        )
+        .encode(x="date:T", y="mortality:Q", tooltip=["date", "mortality"])
         .properties(height=300)
     )
     st.altair_chart(chart1, use_container_width=True)
@@ -111,7 +112,7 @@ def show_dashboard(df):
             x=alt.X("cause:N", sort="-y"),
             y="count:Q",
             color="cause:N",
-            tooltip=["cause", "count"]
+            tooltip=["cause", "count"],
         )
         .properties(height=300)
     )
@@ -124,11 +125,7 @@ def show_dashboard(df):
     chart3 = (
         alt.Chart(stage)
         .mark_arc(innerRadius=50)
-        .encode(
-            theta="count:Q",
-            color="life_stage:N",
-            tooltip=["life_stage", "count"]
-        )
+        .encode(theta="count:Q", color="life_stage:N", tooltip=["life_stage", "count"])
         .properties(height=300)
     )
     st.altair_chart(chart3, use_container_width=True)
@@ -144,7 +141,7 @@ def show_dashboard(df):
             x=alt.X("medium_condition:N", sort="-y"),
             y="count:Q",
             color="medium_condition:N",
-            tooltip=["medium_condition", "count"]
+            tooltip=["medium_condition", "count"],
         )
         .properties(height=300)
     )
@@ -160,7 +157,7 @@ def show_dashboard(df):
         .encode(
             theta="count:Q",
             color="egg_development:N",
-            tooltip=["egg_development", "count"]
+            tooltip=["egg_development", "count"],
         )
         .properties(height=300)
     )
@@ -169,13 +166,18 @@ def show_dashboard(df):
     # 6️⃣ Behavioral Comparison (Pre vs Post Feeding)
     st.subheader("🧠 Behavioral Comparison (Pre vs Post Feeding)")
     behavior_compare = (
-        pd.concat([
-            df["behavior_pre"].value_counts().rename("count_pre"),
-            df["behavior_post"].value_counts().rename("count_post")
-        ], axis=1).fillna(0).reset_index().rename(columns={"index": "behavior"})
+        pd.concat(
+            [
+                df["behavior_pre"].value_counts().rename("count_pre"),
+                df["behavior_post"].value_counts().rename("count_post"),
+            ],
+            axis=1,
+        )
+        .fillna(0)
+        .reset_index()
+        .rename(columns={"index": "behavior"})
     )
     behavior_melted = behavior_compare.melt("behavior", var_name="type", value_name="count")
-
     chart6 = (
         alt.Chart(behavior_melted)
         .mark_bar()
@@ -183,7 +185,7 @@ def show_dashboard(df):
             x=alt.X("behavior:N", sort="-y"),
             y="count:Q",
             color="type:N",
-            tooltip=["behavior", "type", "count"]
+            tooltip=["behavior", "type", "count"],
         )
         .properties(height=300)
     )
@@ -199,7 +201,7 @@ def show_dashboard(df):
             x=alt.X("life_stage:N", sort="-y"),
             y="mortality:Q",
             color="life_stage:N",
-            tooltip=["life_stage", "mortality"]
+            tooltip=["life_stage", "mortality"],
         )
         .properties(height=300)
     )
@@ -213,5 +215,5 @@ def show_dashboard(df):
     st.dataframe(
         df.sort_values("date", ascending=False).reset_index(drop=True),
         use_container_width=True,
-        height=400
+        height=400,
     )
