@@ -101,7 +101,9 @@ def render():
     for col in split_cols:
         df[col] = df[col].apply(lambda x: x if isinstance(x, list) else [x])
 
-    df = df.explode(split_cols, ignore_index=True)
+    # Explode one column at a time (avoids mismatch errors)
+    for col in split_cols:
+        df = df.explode(col, ignore_index=True)
 
     # ---- Tabs ----
     all_sets = sorted(broods_df["set_label"].dropna().unique())
