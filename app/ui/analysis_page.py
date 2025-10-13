@@ -32,7 +32,7 @@ def render():
         st.stop()
 
     # ===========================================================
-    # NORMALIZATION + CANONICAL CLEANUP
+    # NORMALIZATION
     # ===========================================================
     def normalize_id(x: str) -> str:
         if not isinstance(x, str):
@@ -61,7 +61,7 @@ def render():
     broods_df["core_prefix"] = broods_df["mother_id"].map(canonical_core)
 
     # ===========================================================
-    # CANONICAL MERGE (robust prefix matching)
+    # CANONICAL MERGE
     # ===========================================================
     records["set_label"] = None
     records["assigned_person"] = None
@@ -73,7 +73,7 @@ def render():
         records.loc[mask, "assigned_person"] = row.get("assigned_person")
 
     # ===========================================================
-    # CLEAN COLUMNS + SINGLE SAFE EXPLODE
+    # CLEAN + SAFE EXPLODE
     # ===========================================================
     df = records.copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -84,32 +84,29 @@ def render():
         "egg_development", "behavior_pre", "behavior_post"
     ]
 
-    # Split text fields into token lists
     for col in text_cols:
         df[col] = (
             df[col]
             .fillna("")
             .astype(str)
-            .apply(lambda x: [v.strip().lower() for v in re.split(r"[,/;&]+", x) if v.strip()])
+            .apply(lambda x: [v.strip().lower() for v in re.split(r"[,/;&]+", x) if v.strip()] or ["unknown"])
         )
 
-    # Find longest token list length per row
+    # compute max list length safely
     df["max_len"] = df[text_cols].applymap(len).max(axis=1)
-
-    # Pad shorter lists so lengths match
     for col in text_cols:
         df[col] = df.apply(
             lambda r: r[col] + [r[col][-1]] * (r["max_len"] - len(r[col])) if len(r[col]) < r["max_len"] else r[col],
             axis=1
         )
 
-    # Explode ONCE using the longest-list column (avoids row inflation)
+    # explode only once (safe)
     df = df.explode(text_cols[0], ignore_index=True)
     for col in text_cols[1:]:
         df[col] = df[col].apply(lambda x: x[0] if isinstance(x, list) else x)
     df = df.drop(columns=["max_len"])
 
-    # Remove blanks
+    # remove blanks / unknowns
     for col in text_cols:
         df = df[df[col].notna()]
         df = df[df[col] != ""]
@@ -156,7 +153,6 @@ def show_dashboard(df):
     total_mortality = df["mortality"].sum()
     unique_mothers = df["mother_id"].nunique()
 
-    # Compute average lifespan
     df_life = (
         df.groupby("mother_id")["date"]
         .agg(["min", "max"])
