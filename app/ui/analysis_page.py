@@ -8,7 +8,7 @@ from app.core import database
 
 
 # ===========================================================
-# PAGE: Daphnia Records Analysis (Stable Version)
+# PAGE: Daphnia Records Analysis (Debug + Clean KPIs)
 # ===========================================================
 def render():
     st.title("📊 Daphnia Records Analysis")
@@ -53,7 +53,29 @@ def render():
     broods_df["mother_id"] = broods_df["mother_id"].map(normalize_id)
 
     # ---- Merge records ↔ broods (exact like connectivity test) ----
-    df = records.merge(broods_df, on="mother_id", how="left")
+    df = records.merge(broods_df, on="mother_id", how="left", indicator=True)
+
+    # ---- Debug info for mismatches ----
+    missing_sets = df[df["_merge"] != "both"].copy()
+    if not missing_sets.empty:
+        st.warning("⚠️ Some records did not match any broods. Debug info below:")
+        st.dataframe(
+            missing_sets[["mother_id", "_merge", "set_label", "assigned_person"]].head(20),
+            use_container_width=True,
+        )
+
+    # check for missing set_labels explicitly
+    missing_label = df[df["set_label"].isna()]
+    if not missing_label.empty:
+        st.info(
+            f"ℹ️ {len(missing_label)} records have no set_label assigned after merge. "
+            "Displaying a few examples below."
+        )
+        st.dataframe(missing_label[["mother_id", "date", "mortality"]].head(20))
+
+    # ---- Fill unknowns for visualization ----
+    df["set_label"] = df["set_label"].fillna("Unknown")
+    broods_df["set_label"] = broods_df["set_label"].fillna("Unknown")
 
     # ---- Date + cleaning ----
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -107,7 +129,6 @@ def render():
 # ===========================================================
 def show_dashboard(df):
     total_records = len(df)
-    total_mortality = df["mortality"].sum()
     unique_mothers = df["mother_id"].nunique()
 
     df_life = (
@@ -118,7 +139,7 @@ def show_dashboard(df):
     )
     avg_life_expectancy = df_life["days_alive"].mean().round(1) if not df_life.empty else 0
 
-    # KPIs
+    # KPIs (removed Total Mortality)
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Records", f"{total_records:,}")
     c2.metric("Unique Mothers", f"{unique_mothers:,}")
@@ -127,70 +148,75 @@ def show_dashboard(df):
     st.divider()
 
     # ===================== Charts =====================
-    def safe_chart(title, df_func):
+    def safe_chart(title, df_builder):
         try:
-            st.subheader(title)
-            chart_df = df_func()
-            if chart_df.empty:
-                st.info("No data available for this chart.")
+            chart_data, base_df = df_builder()
+            if isinstance(base_df, pd.DataFrame) and base_df.empty:
+                st.info(f"No data for {title}.")
                 return
-            st.altair_chart(chart_df, use_container_width=True)
+            st.subheader(title)
+            st.altair_chart(chart_data, use_container_width=True)
         except Exception as e:
             st.error(f"Chart error ({title}): {e}")
 
     # Mortality trend
     def trend_chart():
         t = df.groupby("date", as_index=False)["mortality"].sum()
-        return (
+        chart = (
             alt.Chart(t)
             .mark_line(point=True)
             .encode(x="date:T", y="mortality:Q", tooltip=["date", "mortality"])
             .properties(height=300)
         )
+        return chart, t
 
     # Cause of death
     def cod_chart():
         cod = df["cause_of_death"].value_counts().reset_index()
         cod.columns = ["cause", "count"]
-        return (
+        chart = (
             alt.Chart(cod)
             .mark_bar()
             .encode(x=alt.X("cause:N", sort="-y"), y="count:Q", color="cause:N")
             .properties(height=300)
         )
+        return chart, cod
 
     # Life stage
     def stage_chart():
         s = df["life_stage"].value_counts().reset_index()
         s.columns = ["life_stage", "count"]
-        return (
+        chart = (
             alt.Chart(s)
             .mark_arc(innerRadius=50)
             .encode(theta="count:Q", color="life_stage:N", tooltip=["life_stage", "count"])
             .properties(height=300)
         )
+        return chart, s
 
     # Medium condition
     def medium_chart():
         m = df["medium_condition"].value_counts().reset_index()
         m.columns = ["medium_condition", "count"]
-        return (
+        chart = (
             alt.Chart(m)
             .mark_bar()
             .encode(x=alt.X("medium_condition:N", sort="-y"), y="count:Q", color="medium_condition:N")
             .properties(height=300)
         )
+        return chart, m
 
     # Egg development
     def egg_chart():
         e = df["egg_development"].value_counts().reset_index()
         e.columns = ["egg_development", "count"]
-        return (
+        chart = (
             alt.Chart(e)
             .mark_arc(innerRadius=50)
             .encode(theta="count:Q", color="egg_development:N", tooltip=["egg_development", "count"])
             .properties(height=300)
         )
+        return chart, e
 
     # Behavior comparison
     def behavior_chart():
@@ -199,22 +225,24 @@ def show_dashboard(df):
         b = pd.concat([pre.rename("count_pre"), post.rename("count_post")], axis=1).fillna(0)
         b = b.reset_index().rename(columns={"index": "behavior"})
         b = b.melt("behavior", var_name="type", value_name="count")
-        return (
+        chart = (
             alt.Chart(b)
             .mark_bar()
             .encode(x=alt.X("behavior:N", sort="-y"), y="count:Q", color="type:N")
             .properties(height=300)
         )
+        return chart, b
 
     # Mortality by stage
     def mort_stage_chart():
         m = df.groupby("life_stage", as_index=False)["mortality"].mean()
-        return (
+        chart = (
             alt.Chart(m)
             .mark_bar()
             .encode(x=alt.X("life_stage:N", sort="-y"), y="mortality:Q", color="life_stage:N")
             .properties(height=300)
         )
+        return chart, m
 
     safe_chart("🪦 Mortality Trends Over Time", trend_chart)
     safe_chart("☠️ Distribution of Causes of Death", cod_chart)
