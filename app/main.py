@@ -42,7 +42,6 @@ daphnia_selection = st.sidebar.radio(
     "Select Daphnia page:",
     list(DAPHNIA_PAGES.keys()),
     label_visibility="collapsed",
-    key="daphnia_page",
 )
 
 st.sidebar.markdown("---")
@@ -52,24 +51,9 @@ moina_selection = st.sidebar.radio(
     "Select Moina page:",
     list(MOINA_PAGES.keys()),
     label_visibility="collapsed",
-    key="moina_page",
 )
 
-# ========= DETERMINE WHICH PAGE TO RENDER =========
-# Priority: whichever was changed last
-if "last_page" not in st.session_state:
-    st.session_state.last_page = "daphnia"
-
-if st.session_state.daphnia_page != st.session_state.get("prev_daphnia_page"):
-    st.session_state.last_page = "daphnia"
-if st.session_state.moina_page != st.session_state.get("prev_moina_page"):
-    st.session_state.last_page = "moina"
-
-st.session_state.prev_daphnia_page = st.session_state.daphnia_page
-st.session_state.prev_moina_page = st.session_state.moina_page
-
-# Render the correct page
-if st.session_state.last_page == "daphnia":
-    DAPHNIA_PAGES[st.session_state.daphnia_page].render()
-else:
-    MOINA_PAGES[st.session_state.moina_page].render()
+# ========= RENDER SELECTED PAGE =========
+# Each section renders its own selection immediately
+DAPHNIA_PAGES[daphnia_selection].render()
+MOINA_PAGES[moina_selection].render()
