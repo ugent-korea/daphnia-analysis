@@ -3,8 +3,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
 from app.core import utils
-from app.ui import coder_page, analysis_page, test_analysis
-# (later you can add: from app.ui import moina_analysis, moina_coder, etc.)
+from app.ui import coder_page, analysis_page, test_connectivity
 
 # ========= BRANDING =========
 APP_DIR = os.path.dirname(__file__)
@@ -26,32 +25,42 @@ utils.set_faded_bg_from_svg(
 DAPHNIA_PAGES = {
     "Code Generator": coder_page,
     "Analysis Page": analysis_page,
-    "Test Analysis": test_analysis,
+    "Test Connectivity": test_connectivity,
 }
 
 MOINA_PAGES = {
-    # placeholders until you add Moina modules
-    "Analysis Page (Moina)": test_analysis,   # temporary reuse of test_analysis
+    # placeholders until Moina modules are added
+    "Analysis Page": test_connectivity,
 }
 
 # ========= SIDEBAR NAVIGATION =========
-st.sidebar.title("Species Selection")
+st.sidebar.title("Navigation")
 
-species = st.sidebar.radio(
-    "Choose species:",
-    ["🪳 Daphnia magna", "🦠 Moina"],
-    horizontal=False,
-)
+selected_page = None
 
-if "Daphnia" in species:
-    st.sidebar.markdown("### 🪳 Daphnia magna Pages")
-    selection = st.sidebar.radio("Select a page:", list(DAPHNIA_PAGES.keys()))
-    page = DAPHNIA_PAGES[selection]
+with st.sidebar:
+    with st.expander("Daphnia magna", expanded=True):
+        daphnia_selection = st.radio(
+            "Select a page:",
+            list(DAPHNIA_PAGES.keys()),
+            label_visibility="collapsed",
+            key="daphnia_radio",
+        )
+        if daphnia_selection:
+            selected_page = DAPHNIA_PAGES[daphnia_selection]
 
-elif "Moina" in species:
-    st.sidebar.markdown("### 🦠 Moina Pages")
-    selection = st.sidebar.radio("Select a page:", list(MOINA_PAGES.keys()))
-    page = MOINA_PAGES[selection]
+    with st.expander("Moina", expanded=False):
+        moina_selection = st.radio(
+            "Select a page:",
+            list(MOINA_PAGES.keys()),
+            label_visibility="collapsed",
+            key="moina_radio",
+        )
+        if moina_selection:
+            selected_page = MOINA_PAGES[moina_selection]
 
 # ========= RENDER SELECTED PAGE =========
-page.render()
+if selected_page:
+    selected_page.render()
+else:
+    st.write("Select a page from the sidebar to begin.")
