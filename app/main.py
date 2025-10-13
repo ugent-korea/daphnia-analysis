@@ -4,6 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
 from app.core import utils
 from app.ui import coder_page, analysis_page, test_connectivity
+# (Later: from app.ui import moina_analysis, moina_coder, etc.)
 
 # ========= BRANDING =========
 APP_DIR = os.path.dirname(__file__)
@@ -36,28 +37,33 @@ MOINA_PAGES = {
 # ========= SIDEBAR NAVIGATION =========
 st.sidebar.title("Navigation")
 
+st.sidebar.markdown("### Daphnia magna")
+daphnia_selection = st.sidebar.radio(
+    "Select Daphnia page:",
+    list(DAPHNIA_PAGES.keys()),
+    label_visibility="collapsed",
+    key="daphnia_page",
+)
+
+st.sidebar.markdown("---")
+
+st.sidebar.markdown("### Moina")
+moina_selection = st.sidebar.radio(
+    "Select Moina page:",
+    list(MOINA_PAGES.keys()),
+    label_visibility="collapsed",
+    key="moina_page",
+)
+
+# ========= DETERMINE WHICH PAGE TO SHOW =========
+# Only one active selection at a time
 selected_page = None
 
-with st.sidebar:
-    with st.expander("Daphnia magna", expanded=True):
-        daphnia_selection = st.radio(
-            "Select a page:",
-            list(DAPHNIA_PAGES.keys()),
-            label_visibility="collapsed",
-            key="daphnia_radio",
-        )
-        if daphnia_selection:
-            selected_page = DAPHNIA_PAGES[daphnia_selection]
+if st.session_state.get("daphnia_page"):
+    selected_page = DAPHNIA_PAGES[st.session_state["daphnia_page"]]
 
-    with st.expander("Moina", expanded=False):
-        moina_selection = st.radio(
-            "Select a page:",
-            list(MOINA_PAGES.keys()),
-            label_visibility="collapsed",
-            key="moina_radio",
-        )
-        if moina_selection:
-            selected_page = MOINA_PAGES[moina_selection]
+if st.session_state.get("moina_page") and st.session_state["moina_page"]:
+    selected_page = MOINA_PAGES[st.session_state["moina_page"]]
 
 # ========= RENDER SELECTED PAGE =========
 if selected_page:
