@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import pandas as pd
 import altair as alt
@@ -5,10 +6,6 @@ from sqlalchemy import text
 from app.core import database
 from app.core.coder import canonical_core
 
-
-# ===========================================================
-# PAGE: Daphnia Records Analysis (using canonical_core)
-# ===========================================================
 def render():
     st.title("📊 Daphnia Records Analysis")
     st.caption("Automated analysis of Daphnia mortality, environment, and behavior trends")
@@ -36,32 +33,33 @@ def render():
         st.warning("No records found in the database.")
         st.stop()
 
-    # ---- Normalize IDs using canonical_core ----
+    # ---- Canonical normalization ----
     def safe_core(x):
+        if not x or not isinstance(x, str):
+            return None
+        s = x.strip().split("_")[0]
+        s = re.sub(r"(\D)(\d)", r"\1.\2", s)  # ensure A1→A.1
+        s = s.replace("..", ".")
         try:
-            return canonical_core(x)
+            return canonical_core(s)
         except Exception:
             return None
 
     records["canonical_core"] = records["mother_id"].map(safe_core)
     broods_df["canonical_core"] = broods_df["mother_id"].map(safe_core)
 
-    # ---- Merge by canonical core ----
-    df = records.merge(
-        broods_df[["canonical_core", "set_label", "assigned_person"]],
-        on="canonical_core",
-        how="left"
-    )
+    # ---- Fuzzy join by canonical prefix ----
+    brood_map = broods_df[["canonical_core", "set_label", "assigned_person"]].dropna()
+    records["set_label"] = None
+    records["assigned_person"] = None
 
-    # ---- Diagnostic for unmatched canonical cores ----
-    unmatched = df[df["set_label"].isna()]
-    if not unmatched.empty:
-        st.warning(f"⚠️ {len(unmatched)} records could not be matched to a brood set (canonical mismatch).")
-        st.caption("Showing a few unmatched examples:")
-        st.dataframe(
-            unmatched[["mother_id", "canonical_core", "date", "life_stage"]].head(10),
-            use_container_width=True
-        )
+    for _, row in brood_map.iterrows():
+        prefix = row["canonical_core"]
+        mask = records["canonical_core"].fillna("").str.startswith(prefix)
+        records.loc[mask, "set_label"] = row["set_label"]
+        records.loc[mask, "assigned_person"] = row["assigned_person"]
+
+    df = records.copy()
 
     # ---- Clean columns ----
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -69,12 +67,27 @@ def render():
     df = df.sort_values("date", ascending=True)
 
     df["mortality"] = pd.to_numeric(df["mortality"], errors="coerce").fillna(0).astype(int)
-
-    for col in ["life_stage", "medium_condition", "cause_of_death",
-                "egg_development", "behavior_pre", "behavior_post"]:
+    text_cols = [
+        "life_stage",
+        "medium_condition",
+        "cause_of_death",
+        "egg_development",
+        "behavior_pre",
+        "behavior_post",
+    ]
+    for col in text_cols:
         df[col] = df[col].fillna("").str.strip().str.lower()
-
     df["set_label"] = df["set_label"].fillna("unknown").str.upper().str.strip()
+
+    # ---- Split comma-separated values (except Notes) ----
+    for col in ["cause_of_death", "medium_condition", "behavior_pre", "behavior_post"]:
+        df[col] = (
+            df[col]
+            .astype(str)
+            .str.split(r"[,/;&]+")
+            .apply(lambda x: [v.strip().lower() for v in x if v.strip()] if isinstance(x, list) else [])
+        )
+    df = df.explode(["cause_of_death", "medium_condition", "behavior_pre", "behavior_post"], ignore_index=True)
 
     # ---- Tabs ----
     all_sets = sorted(broods_df["set_label"].dropna().unique())
@@ -144,18 +157,26 @@ def show_dashboard(df):
         .mark_line(point=True)
         .encode(x="date:T", y="mortality:Q", tooltip=["date", "mortality"])
         .properties(height=300),
-        use_container_width=True
+        use_container_width=True,
     )
 
     st.subheader("☠️ Distribution of Causes of Death")
-    cod = clean_nonempty(df["cause_of_death"]).value_counts().reset_index()
+    cod_split = (
+        clean_nonempty(df["cause_of_death"].astype(str))
+        .str.split(r"[,/;&]+")
+        .explode()
+        .str.strip()
+        .replace("", pd.NA)
+        .dropna()
+    )
+    cod = cod_split.value_counts().reset_index()
     cod.columns = ["cause", "count"]
     st.altair_chart(
         alt.Chart(cod)
         .mark_bar()
         .encode(x=alt.X("cause:N", sort="-y"), y="count:Q", color="cause:N", tooltip=["cause", "count"])
         .properties(height=300),
-        use_container_width=True
+        use_container_width=True,
     )
 
     st.subheader("🦠 Life Stage Distribution")
@@ -166,7 +187,7 @@ def show_dashboard(df):
         .mark_arc(innerRadius=50)
         .encode(theta="count:Q", color="life_stage:N", tooltip=["life_stage", "count"])
         .properties(height=300),
-        use_container_width=True
+        use_container_width=True,
     )
 
     st.subheader("🌊 Medium Condition Analysis")
@@ -177,7 +198,7 @@ def show_dashboard(df):
         .mark_bar()
         .encode(x=alt.X("medium_condition:N", sort="-y"), y="count:Q", color="medium_condition:N", tooltip=["medium_condition", "count"])
         .properties(height=300),
-        use_container_width=True
+        use_container_width=True,
     )
 
     st.subheader("🥚 Egg Development Status")
@@ -188,7 +209,7 @@ def show_dashboard(df):
         .mark_arc(innerRadius=50)
         .encode(theta="count:Q", color="egg_development:N", tooltip=["egg_development", "count"])
         .properties(height=300),
-        use_container_width=True
+        use_container_width=True,
     )
 
     st.subheader("🧠 Behavioral Comparison (Pre vs Post Feeding)")
@@ -201,7 +222,7 @@ def show_dashboard(df):
         .mark_bar()
         .encode(x=alt.X("behavior:N", sort="-y"), y="count:Q", color="type:N", tooltip=["behavior", "type", "count"])
         .properties(height=300),
-        use_container_width=True
+        use_container_width=True,
     )
 
     st.subheader("⚰️ Mortality by Life Stage")
@@ -212,13 +233,9 @@ def show_dashboard(df):
         .mark_bar()
         .encode(x=alt.X("life_stage:N", sort="-y"), y="mortality:Q", color="life_stage:N", tooltip=["life_stage", "mortality"])
         .properties(height=300),
-        use_container_width=True
+        use_container_width=True,
     )
 
     st.divider()
     st.subheader("📋 Raw Data Preview")
-    st.dataframe(
-        df.sort_values("date", ascending=True).reset_index(drop=True),
-        use_container_width=True,
-        height=400
-    )
+    st.dataframe(df.sort_values("date", ascending=True).reset_index(drop=True), use_container_width=True, height=400)
