@@ -6,6 +6,10 @@ from sqlalchemy import text
 from app.core import database
 from app.core.coder import canonical_core
 
+
+# ===========================================================
+# PAGE: Daphnia Records Analysis
+# ===========================================================
 def render():
     st.title("📊 Daphnia Records Analysis")
     st.caption("Automated analysis of Daphnia mortality, environment, and behavior trends")
@@ -79,15 +83,25 @@ def render():
         df[col] = df[col].fillna("").str.strip().str.lower()
     df["set_label"] = df["set_label"].fillna("unknown").str.upper().str.strip()
 
-    # ---- Split comma-separated values (except Notes) ----
-    for col in ["cause_of_death", "medium_condition", "behavior_pre", "behavior_post"]:
+    # ---- Safe split & explode (comma-separated) ----
+    split_cols = ["cause_of_death", "medium_condition", "behavior_pre", "behavior_post"]
+
+    for col in split_cols:
         df[col] = (
             df[col]
             .astype(str)
-            .str.split(r"[,/;&]+")
-            .apply(lambda x: [v.strip().lower() for v in x if v.strip()] if isinstance(x, list) else [])
+            .apply(
+                lambda x: [v.strip().lower() for v in re.split(r"[,/;&]+", x) if v.strip()]
+                if x.strip()
+                else []
+            )
         )
-    df = df.explode(["cause_of_death", "medium_condition", "behavior_pre", "behavior_post"], ignore_index=True)
+
+    # Ensure explode-safe structure
+    for col in split_cols:
+        df[col] = df[col].apply(lambda x: x if isinstance(x, list) else [x])
+
+    df = df.explode(split_cols, ignore_index=True)
 
     # ---- Tabs ----
     all_sets = sorted(broods_df["set_label"].dropna().unique())
@@ -142,9 +156,8 @@ def show_dashboard(df):
 
     st.divider()
 
-    # Utility to clean data before plotting
+    # Helper to skip blanks/unknowns
     def clean_nonempty(series):
-        """Exclude empty, NaN, or 'unknown' values."""
         return series.dropna().loc[~series.str.lower().isin(["", "unknown", "nan", "none"])]
 
     # ===========================================================
@@ -161,15 +174,7 @@ def show_dashboard(df):
     )
 
     st.subheader("☠️ Distribution of Causes of Death")
-    cod_split = (
-        clean_nonempty(df["cause_of_death"].astype(str))
-        .str.split(r"[,/;&]+")
-        .explode()
-        .str.strip()
-        .replace("", pd.NA)
-        .dropna()
-    )
-    cod = cod_split.value_counts().reset_index()
+    cod = clean_nonempty(df["cause_of_death"]).value_counts().reset_index()
     cod.columns = ["cause", "count"]
     st.altair_chart(
         alt.Chart(cod)
