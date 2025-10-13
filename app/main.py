@@ -39,6 +39,7 @@ st.sidebar.title("Navigation")
 
 st.sidebar.markdown("### Daphnia magna")
 daphnia_selection = st.sidebar.radio(
+    "Select Daphnia page:",
     list(DAPHNIA_PAGES.keys()),
     label_visibility="collapsed",
     key="daphnia_page",
@@ -48,6 +49,7 @@ st.sidebar.markdown("---")
 
 st.sidebar.markdown("### Moina")
 moina_selection = st.sidebar.radio(
+    "Select Moina page:",
     list(MOINA_PAGES.keys()),
     label_visibility="collapsed",
     key="moina_page",
