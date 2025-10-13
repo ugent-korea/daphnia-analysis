@@ -7,7 +7,7 @@ from app.core import database
 
 
 # ===========================================================
-# PAGE: Daphnia Records Analysis (cached broods + records)
+# PAGE: Daphnia Records Analysis
 # ===========================================================
 def render():
     st.title("📊 Daphnia Records Analysis")
@@ -32,7 +32,7 @@ def render():
         st.stop()
 
     # ===========================================================
-    # NORMALIZATION
+    # NORMALIZATION + CANONICAL CLEANUP
     # ===========================================================
     def normalize_id(x: str) -> str:
         if not isinstance(x, str):
@@ -73,7 +73,7 @@ def render():
         records.loc[mask, "assigned_person"] = row.get("assigned_person")
 
     # ===========================================================
-    # CLEAN + EXPLODE MULTI-ENTRIES
+    # CLEAN COLUMNS + SINGLE SAFE EXPLODE
     # ===========================================================
     df = records.copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -84,6 +84,7 @@ def render():
         "egg_development", "behavior_pre", "behavior_post"
     ]
 
+    # Split text fields into token lists
     for col in text_cols:
         df[col] = (
             df[col]
@@ -92,22 +93,30 @@ def render():
             .apply(lambda x: [v.strip().lower() for v in re.split(r"[,/;&]+", x) if v.strip()])
         )
 
-    # compute maximum list length per row (avoid mismatch)
-    max_len = df[text_cols].applymap(len).max(axis=1).max()
-    for col in text_cols:
-        df[col] = df[col].apply(lambda lst: lst if isinstance(lst, list) and lst else ["unknown"])
-        df[col] = df[col].apply(lambda lst: lst + [lst[-1]] * (max_len - len(lst)))
+    # Find longest token list length per row
+    df["max_len"] = df[text_cols].applymap(len).max(axis=1)
 
+    # Pad shorter lists so lengths match
     for col in text_cols:
-        df = df.explode(col, ignore_index=True)
+        df[col] = df.apply(
+            lambda r: r[col] + [r[col][-1]] * (r["max_len"] - len(r[col])) if len(r[col]) < r["max_len"] else r[col],
+            axis=1
+        )
 
-    # exclude blank / 'unknown'
+    # Explode ONCE using the longest-list column (avoids row inflation)
+    df = df.explode(text_cols[0], ignore_index=True)
+    for col in text_cols[1:]:
+        df[col] = df[col].apply(lambda x: x[0] if isinstance(x, list) else x)
+    df = df.drop(columns=["max_len"])
+
+    # Remove blanks
     for col in text_cols:
+        df = df[df[col].notna()]
         df = df[df[col] != ""]
         df = df[df[col] != "unknown"]
 
     # ===========================================================
-    # TAB NAVIGATION
+    # TABS
     # ===========================================================
     all_sets = sorted(broods_df["set_label"].dropna().unique().tolist())
     if not all_sets:
@@ -147,6 +156,7 @@ def show_dashboard(df):
     total_mortality = df["mortality"].sum()
     unique_mothers = df["mother_id"].nunique()
 
+    # Compute average lifespan
     df_life = (
         df.groupby("mother_id")["date"]
         .agg(["min", "max"])
@@ -164,18 +174,17 @@ def show_dashboard(df):
 
     st.divider()
 
-    # Mortality trend
+    # Graphs
     st.subheader("🪦 Mortality Trends Over Time")
-    mort_trend = df.groupby("date", as_index=False)["mortality"].sum()
+    trend = df.groupby("date", as_index=False)["mortality"].sum()
     st.altair_chart(
-        alt.Chart(mort_trend)
+        alt.Chart(trend)
         .mark_line(point=True)
         .encode(x="date:T", y="mortality:Q", tooltip=["date", "mortality"])
-        .properties(height=300, width="container"),
+        .properties(height=300),
         use_container_width=True,
     )
 
-    # Cause of death
     st.subheader("☠️ Distribution of Causes of Death")
     cod = df["cause_of_death"].value_counts().reset_index()
     cod.columns = ["cause", "count"]
@@ -183,11 +192,10 @@ def show_dashboard(df):
         alt.Chart(cod)
         .mark_bar()
         .encode(x=alt.X("cause:N", sort="-y"), y="count:Q", color="cause:N")
-        .properties(height=300, width="container"),
+        .properties(height=300),
         use_container_width=True,
     )
 
-    # Life stage
     st.subheader("🦠 Life Stage Distribution")
     stage = df["life_stage"].value_counts().reset_index()
     stage.columns = ["life_stage", "count"]
@@ -195,11 +203,10 @@ def show_dashboard(df):
         alt.Chart(stage)
         .mark_arc(innerRadius=50)
         .encode(theta="count:Q", color="life_stage:N")
-        .properties(height=300, width="container"),
+        .properties(height=300),
         use_container_width=True,
     )
 
-    # Medium
     st.subheader("🌊 Medium Condition Analysis")
     medium = df["medium_condition"].value_counts().reset_index()
     medium.columns = ["medium_condition", "count"]
@@ -207,11 +214,10 @@ def show_dashboard(df):
         alt.Chart(medium)
         .mark_bar()
         .encode(x=alt.X("medium_condition:N", sort="-y"), y="count:Q", color="medium_condition:N")
-        .properties(height=300, width="container"),
+        .properties(height=300),
         use_container_width=True,
     )
 
-    # Eggs
     st.subheader("🥚 Egg Development Status")
     egg = df["egg_development"].value_counts().reset_index()
     egg.columns = ["egg_development", "count"]
@@ -219,11 +225,10 @@ def show_dashboard(df):
         alt.Chart(egg)
         .mark_arc(innerRadius=50)
         .encode(theta="count:Q", color="egg_development:N")
-        .properties(height=300, width="container"),
+        .properties(height=300),
         use_container_width=True,
     )
 
-    # Behavior
     st.subheader("🧠 Behavioral Comparison (Pre vs Post Feeding)")
     behavior = (
         pd.concat(
@@ -235,30 +240,25 @@ def show_dashboard(df):
         .reset_index()
         .rename(columns={"index": "behavior"})
     )
-    behavior_melt = behavior.melt("behavior", var_name="type", value_name="count")
+    melted = behavior.melt("behavior", var_name="type", value_name="count")
     st.altair_chart(
-        alt.Chart(behavior_melt)
+        alt.Chart(melted)
         .mark_bar()
         .encode(x="behavior:N", y="count:Q", color="type:N")
-        .properties(height=300, width="container"),
+        .properties(height=300),
         use_container_width=True,
     )
 
-    # Mortality by life stage
     st.subheader("⚰️ Mortality by Life Stage")
     mort_stage = df.groupby("life_stage", as_index=False)["mortality"].mean()
     st.altair_chart(
         alt.Chart(mort_stage)
         .mark_bar()
         .encode(x="life_stage:N", y="mortality:Q", color="life_stage:N")
-        .properties(height=300, width="container"),
+        .properties(height=300),
         use_container_width=True,
     )
 
     st.divider()
     st.subheader("📋 Raw Data Preview")
-    st.dataframe(
-        df.sort_values("date", ascending=True).reset_index(drop=True),
-        use_container_width=True,
-        height=400,
-    )
+    st.dataframe(df.sort_values("date").reset_index(drop=True), use_container_width=True, height=400)
