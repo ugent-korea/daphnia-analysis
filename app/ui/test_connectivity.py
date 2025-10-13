@@ -8,7 +8,7 @@ from app.core import database
 # PAGE: Connectivity Test with Safe Tab-Level Error Handling
 # ===========================================================
 def render():
-    st.title("🧩 Daphnia Records Connection Test (Safe Mode)")
+    st.title("🧩 Daphnia Records Connection Test")
     st.caption("Verifying if records correctly connect to broods (per-set isolation with error capture)")
 
     # ---- Load cached broods metadata ----
