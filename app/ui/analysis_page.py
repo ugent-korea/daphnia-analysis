@@ -92,13 +92,23 @@ def render():
         "egg_development", "behavior_pre", "behavior_post"
     ]
     for col in text_cols:
-        df[col] = df[col].fillna("").astype(str).str.strip()
-        df[col] = df[col].apply(
-            lambda x: [v.strip().lower() for v in re.split(r"[,/;&]+", x) if v.strip()]
+        df[col] = (
+            df[col]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .apply(lambda x: [v.strip().lower() for v in re.split(r"[,/;&]+", x) if v.strip()])
         )
 
-    df = df.explode(text_cols, ignore_index=True)
-    df = df[df["cause_of_death"] != ""]  # ignore blank cause entries
+    # Normalize list lengths by padding shorter ones with a single element
+    max_len = max(df[text_cols].applymap(len).max(axis=1))
+    for col in text_cols:
+        df[col] = df[col].apply(lambda lst: lst if isinstance(lst, list) else [lst])
+        df[col] = df[col].apply(lambda lst: lst + [lst[-1]] * (max_len - len(lst)))
+
+    # Now explode column-by-column safely
+    for col in text_cols:
+        df = df.explode(col, ignore_index=True)
 
     # ===========================================================
     # TAB NAVIGATION BY SET
