@@ -97,14 +97,14 @@ def _split_two_tables(values):
 # ==== Header normalization ====
 ALIASES = {
     r"^date$": "date",
-    r"^life\s*stage$": "life_stage",
-    r"^mortality": "mortality",
-    r"^cause": "cause_of_death",
-    r"^disease$": "disease",
-    r"^medium": "medium_condition",
-    r"^egg": "egg_development",
-    r"^behavior\s*prior": "behavior_pre",
-    r"^behavior\s*post": "behavior_post",
+    r"^(life\s*stage|lifestage)$": "life_stage",
+    r"^mortality(\s*\(?\s*n\s*\)?)?$": "mortality",  # Matches: mortality, mortality(n), mortality (n)
+    r"^cause\s*of\s*death$": "cause_of_death",
+    r"^(sick|disease)$": "disease",  # Both "sick" and "disease" map to disease column
+    r"^medium\s*condition$": "medium_condition",
+    r"^egg\s*development$": "egg_development",
+    r"^behavior\s*(prior|before)\s*(feeding|to\s*feeding)?$": "behavior_pre",
+    r"^behavior\s*(post|after)\s*(feeding)?$": "behavior_post",
     r"^notes?$": "notes",
     r"^(mother\s*id|id\s*\(?\s*pk\s*\)?)$": "mother_id",  # Matches: mother id, motherid, id(pk), id (pk), ID(PK)
 }
@@ -326,6 +326,11 @@ def main():
         headers = left[0]
         df = pd.DataFrame(left[1:], columns=headers)
         hmap = _header_map(headers)
+        
+        # DEBUG: Log the headers we found
+        _log(f"Tab '{title}' headers found: {headers}")
+        _log(f"Tab '{title}' header mapping: {hmap}")
+        
         if "mother_id" not in hmap:
             _log(f"Tab '{title}' skipped: missing MotherID.")
             skipped_tabs += 1
