@@ -3,6 +3,7 @@ from collections import defaultdict
 from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, text
 import streamlit as st
+import pandas as pd
 
 DB_URL = os.getenv("DATABASE_URL") or st.secrets.get("DATABASE_URL")
 
@@ -91,5 +92,17 @@ def load_all(day_key: str):
         "set_max_gen": dict(set_max_gen),
     }
 
+@st.cache_data(show_spinner=False)
+def load_records(day_key: str):
+    """Load ALL records once per KST day from the records table."""
+    eng = get_engine()
+    with eng.connect() as conn:
+        records_df = pd.read_sql(text("SELECT * FROM records"), conn)
+    return records_df
+
 def get_data():
     return load_all(_kst_day_key())
+
+def get_records():
+    """Get cached records dataframe."""
+    return load_records(_kst_day_key())

@@ -1,7 +1,47 @@
+import re
 import streamlit as st
 import pandas as pd
-from sqlalchemy import text
 from app.core import database
+
+
+# ===========================================================
+# Helper: Normalize mother_id to canonical format
+# ===========================================================
+CORE_RE = re.compile(r'^([A-Za-z]+)(.*)$')
+
+def normalize_mother_id(mid: str) -> str:
+    """Normalize mother_id to canonical format: LETTER.NUM.NUM_SUFFIX"""
+    if not isinstance(mid, str):
+        return ""
+    
+    mid = mid.strip().upper()
+    if not mid:
+        return ""
+    
+    # Split core and suffix
+    parts = mid.split('_', 1)
+    core = parts[0]
+    suffix = parts[1] if len(parts) > 1 else ""
+    
+    # Parse core (e.g., "E.1.2" or "E1.2" or "E12")
+    m = CORE_RE.match(core)
+    if not m:
+        return mid  # Return as-is if pattern doesn't match
+    
+    word = m.group(1).upper()
+    nums = re.findall(r'\d+', m.group(2))
+    
+    if not nums:
+        return mid  # No numbers found, return as-is
+    
+    # Normalize: remove leading zeros from each number
+    nums = [str(int(n)) for n in nums]
+    normalized_core = word + '.' + '.'.join(nums)
+    
+    # Reconstruct with suffix if present
+    if suffix:
+        return f"{normalized_core}_{suffix}"
+    return normalized_core
 
 
 # ===========================================================
@@ -18,19 +58,13 @@ def render():
         broods_df = pd.DataFrame.from_dict(by_full, orient="index")
         if "mother_id" not in broods_df.columns:
             broods_df["mother_id"] = broods_df.index
-
-        broods_df = broods_df[
-            [c for c in broods_df.columns if c in ["mother_id", "set_label", "assigned_person"]]
-        ].copy()
     except Exception as e:
         st.error(f"❌ Failed to load broods cache: {e}")
         return
 
-    # ---- Load records from Neon DB ----
+    # ---- Load cached records ----
     try:
-        engine = database.get_engine()
-        with engine.connect() as conn:
-            records = pd.read_sql(text("SELECT * FROM records"), conn)
+        records = database.get_records()
     except Exception as e:
         st.error(f"❌ Failed to load records table: {e}")
         return
@@ -39,9 +73,9 @@ def render():
         st.warning("⚠️ No records found in the database.")
         st.stop()
 
-    # ---- Normalize IDs ----
-    records["mother_id"] = records["mother_id"].astype(str).str.strip().str.upper()
-    broods_df["mother_id"] = broods_df["mother_id"].astype(str).str.strip().str.upper()
+    # ---- Normalize IDs using canonical format ----
+    records["mother_id"] = records["mother_id"].map(normalize_mother_id)
+    broods_df["mother_id"] = broods_df["mother_id"].map(normalize_mother_id)
 
     # ---- Merge records ↔ broods ----
     try:

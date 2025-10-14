@@ -21,20 +21,28 @@ utils.set_faded_bg_from_svg(
 
 DAPHNIA_PAGES = {
     "Code Generator": coder_page,
-    "Analysis Page": analysis_page,
+    "Daphnia Analysis": analysis_page,
     "Test Connectivity": test_connectivity,
 }
 
 MOINA_PAGES = {
-    "Analysis Page": test_connectivity,  # placeholder
+    "Moina Analysis": test_connectivity,  # placeholder
 }
 
 st.sidebar.title("Navigation")
+
+# Initialize session state for radio selections
+if "selected_page" not in st.session_state:
+    st.session_state.selected_page = "Code Generator"
+    st.session_state.selected_species = "daphnia"
 
 st.sidebar.markdown("### Daphnia magna")
 daphnia_selection = st.sidebar.radio(
     "Select Daphnia page:",
     list(DAPHNIA_PAGES.keys()),
+    index=list(DAPHNIA_PAGES.keys()).index(st.session_state.selected_page) 
+          if st.session_state.selected_species == "daphnia" 
+          else 0,
     label_visibility="collapsed",
     key="daphnia_radio",
 )
@@ -45,23 +53,28 @@ st.sidebar.markdown("### Moina")
 moina_selection = st.sidebar.radio(
     "Select Moina page:",
     list(MOINA_PAGES.keys()),
+    index=list(MOINA_PAGES.keys()).index(st.session_state.selected_page) 
+          if st.session_state.selected_species == "moina" 
+          else 0,
     label_visibility="collapsed",
     key="moina_radio",
 )
 
-# --- Only render the last changed section ---
-if "last_species" not in st.session_state:
-    st.session_state.last_species = "daphnia"
+# Detect which radio button changed
+if st.session_state.get("prev_daphnia") != daphnia_selection:
+    st.session_state.selected_species = "daphnia"
+    st.session_state.selected_page = daphnia_selection
+    
+if st.session_state.get("prev_moina") != moina_selection:
+    st.session_state.selected_species = "moina"
+    st.session_state.selected_page = moina_selection
 
-if st.session_state.daphnia_radio != st.session_state.get("prev_daphnia"):
-    st.session_state.last_species = "daphnia"
-if st.session_state.moina_radio != st.session_state.get("prev_moina"):
-    st.session_state.last_species = "moina"
+# Store previous values for next comparison
+st.session_state.prev_daphnia = daphnia_selection
+st.session_state.prev_moina = moina_selection
 
-st.session_state.prev_daphnia = st.session_state.daphnia_radio
-st.session_state.prev_moina = st.session_state.moina_radio
-
-if st.session_state.last_species == "daphnia":
-    DAPHNIA_PAGES[st.session_state.daphnia_radio].render()
+# Render the selected page
+if st.session_state.selected_species == "daphnia":
+    DAPHNIA_PAGES[st.session_state.selected_page].render()
 else:
-    MOINA_PAGES[st.session_state.moina_radio].render()
+    MOINA_PAGES[st.session_state.selected_page].render()
