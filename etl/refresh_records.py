@@ -137,6 +137,7 @@ def _pick_column_series(df, colname):
 
 # ==== DB schema ====
 def _ensure_schema(conn):
+    # Create table if not exists
     conn.execute(text("""
     CREATE TABLE IF NOT EXISTS records(
       id SERIAL PRIMARY KEY,
@@ -155,6 +156,33 @@ def _ensure_schema(conn):
       assigned_person TEXT
     )
     """))
+    
+    # Add set_label column if it doesn't exist (for old databases)
+    conn.execute(text("""
+    DO $$ 
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name='records' AND column_name='set_label'
+        ) THEN
+            ALTER TABLE records ADD COLUMN set_label TEXT;
+        END IF;
+    END $$;
+    """))
+    
+    # Add assigned_person column if it doesn't exist (for old databases)
+    conn.execute(text("""
+    DO $$ 
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name='records' AND column_name='assigned_person'
+        ) THEN
+            ALTER TABLE records ADD COLUMN assigned_person TEXT;
+        END IF;
+    END $$;
+    """))
+    
     conn.execute(text("""
     CREATE TABLE IF NOT EXISTS meta(
       k TEXT PRIMARY KEY,
