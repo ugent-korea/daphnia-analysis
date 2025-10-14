@@ -77,22 +77,23 @@ def render():
     # ---- Optional: Advanced Debug Info ----
     with st.expander("🔧 Advanced Debug Info (Click to expand)", expanded=False):
         st.write(f"**Loaded {len(broods_df)} broods and {len(records)} records**")
-        st.write("**Sample broods (before normalization):**")
-        st.dataframe(broods_df[["mother_id", "set_label", "assigned_person"]].head(10))
-        st.write("**Sample records (before normalization):**")
-        st.dataframe(records[["mother_id", "date"]].head(10))
         
-        # Show unique sets in broods
-        unique_sets_raw = broods_df["set_label"].dropna().unique()
-        st.write(f"**Unique set_labels in broods (raw):** {sorted(unique_sets_raw)}")
+        # Check what columns exist in each dataframe
+        st.write("**Columns in broods_df:**", list(broods_df.columns))
+        st.write("**Columns in records:**", list(records.columns))
         
-        # Show normalization
-        st.write("**Sample normalized IDs:**")
-        comparison = pd.DataFrame({
-            "Original (broods)": broods_df["mother_id_original"].head(10).values,
-            "Normalized (broods)": broods_df["mother_id"].head(10).values,
-        })
-        st.dataframe(comparison)
+        st.write("**Sample broods:**")
+        if "set_label" in broods_df.columns and "assigned_person" in broods_df.columns:
+            st.dataframe(broods_df[["mother_id", "set_label", "assigned_person"]].head(10))
+        else:
+            st.dataframe(broods_df.head(10))
+            
+        st.write("**Sample records:**")
+        cols_to_show = [c for c in ["mother_id", "date", "set_label", "assigned_person"] if c in records.columns]
+        if cols_to_show:
+            st.dataframe(records[cols_to_show].head(10))
+        else:
+            st.dataframe(records.head(10))
 
     # ---- Normalize IDs using canonical format ----
     records["mother_id_original"] = records["mother_id"]  # Keep original for debugging
@@ -102,7 +103,29 @@ def render():
     broods_df["mother_id"] = broods_df["mother_id"].map(normalize_mother_id)
 
     # ---- Merge records ↔ broods ----
-    df = records.merge(broods_df, on="mother_id", how="left", indicator=True)
+    df = records.merge(broods_df, on="mother_id", how="left", indicator=True, suffixes=('_rec', '_brood'))
+    
+    # Handle duplicate columns from merge (set_label and assigned_person might exist in both)
+    if 'set_label_rec' in df.columns and 'set_label_brood' in df.columns:
+        # Prefer records table value, fall back to broods
+        df['set_label'] = df['set_label_rec'].fillna(df['set_label_brood'])
+        df = df.drop(columns=['set_label_rec', 'set_label_brood'])
+    elif 'set_label_rec' in df.columns:
+        df['set_label'] = df['set_label_rec']
+        df = df.drop(columns=['set_label_rec'])
+    elif 'set_label_brood' in df.columns:
+        df['set_label'] = df['set_label_brood']
+        df = df.drop(columns=['set_label_brood'])
+    
+    if 'assigned_person_rec' in df.columns and 'assigned_person_brood' in df.columns:
+        df['assigned_person'] = df['assigned_person_rec'].fillna(df['assigned_person_brood'])
+        df = df.drop(columns=['assigned_person_rec', 'assigned_person_brood'])
+    elif 'assigned_person_rec' in df.columns:
+        df['assigned_person'] = df['assigned_person_rec']
+        df = df.drop(columns=['assigned_person_rec'])
+    elif 'assigned_person_brood' in df.columns:
+        df['assigned_person'] = df['assigned_person_brood']
+        df = df.drop(columns=['assigned_person_brood'])
 
     # ---- Check for merge issues (only show if problems exist) ----
     missing_sets = df[df["_merge"] != "both"].copy()
