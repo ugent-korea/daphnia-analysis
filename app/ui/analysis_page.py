@@ -74,9 +74,33 @@ def render():
         st.warning("⚠️ No records found in the database.")
         st.stop()
 
+    # ---- DEBUG: Show what we loaded ----
+    with st.expander("🔍 Debug: Data Loading Info", expanded=False):
+        st.write(f"**Loaded {len(broods_df)} broods and {len(records)} records**")
+        st.write("**Sample broods (before normalization):**")
+        st.dataframe(broods_df[["mother_id", "set_label", "assigned_person"]].head(10))
+        st.write("**Sample records (before normalization):**")
+        st.dataframe(records[["mother_id", "date"]].head(10))
+        
+        # Show unique sets in broods
+        unique_sets_raw = broods_df["set_label"].dropna().unique()
+        st.write(f"**Unique set_labels in broods (raw):** {sorted(unique_sets_raw)}")
+
     # ---- Normalize IDs using canonical format ----
+    records["mother_id_original"] = records["mother_id"]  # Keep original for debugging
+    broods_df["mother_id_original"] = broods_df["mother_id"]  # Keep original for debugging
+    
     records["mother_id"] = records["mother_id"].map(normalize_mother_id)
     broods_df["mother_id"] = broods_df["mother_id"].map(normalize_mother_id)
+    
+    # ---- DEBUG: Show normalization results ----
+    with st.expander("🔍 Debug: ID Normalization", expanded=False):
+        st.write("**Sample normalized IDs:**")
+        comparison = pd.DataFrame({
+            "Original (broods)": broods_df["mother_id_original"].head(10).values,
+            "Normalized (broods)": broods_df["mother_id"].head(10).values,
+        })
+        st.dataframe(comparison)
 
     # ---- Merge records ↔ broods (exact like connectivity test) ----
     df = records.merge(broods_df, on="mother_id", how="left", indicator=True)
@@ -116,12 +140,22 @@ def render():
     for col in text_cols:
         df[col] = df[col].fillna("").astype(str).str.strip().str.lower()
 
-    # ---- Identify sets ----
-    all_sets = sorted(df["set_label"].dropna().unique().tolist())
-    if not all_sets:
-        st.warning("⚠️ No set_label values found after merge — check broods metadata.")
-        st.dataframe(df.head(), use_container_width=True)
+    # ---- Identify sets from BROODS table (not just records) ----
+    # Get all sets that exist in broods, regardless of whether they have records
+    all_sets_in_broods = sorted(broods_df["set_label"].dropna().unique().tolist())
+    # Remove "Unknown" from the list if it exists
+    all_sets_in_broods = [s for s in all_sets_in_broods if s != "Unknown"]
+    
+    if not all_sets_in_broods:
+        st.warning("⚠️ No set_label values found in broods table — check broods metadata.")
+        st.dataframe(broods_df[["mother_id", "set_label"]].head(20), use_container_width=True)
         st.stop()
+    
+    # Debug: Show which sets have records
+    sets_with_records = sorted(df[df["set_label"] != "Unknown"]["set_label"].dropna().unique().tolist())
+    st.info(f"📊 Found {len(all_sets_in_broods)} total sets in broods. Sets with records: {', '.join(sets_with_records) if sets_with_records else 'None yet'}")
+    
+    all_sets = all_sets_in_broods
 
     # ---- Tabs ----
     tabs = st.tabs(["🌍 Cumulative"] + [f"Set {s}" for s in all_sets])
