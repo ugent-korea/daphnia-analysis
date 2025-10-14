@@ -127,22 +127,54 @@ def render():
     df["set_label"] = df["set_label"].fillna("Unknown")
     broods_df["set_label"] = broods_df["set_label"].fillna("Unknown")
 
-    # ---- Date + cleaning ----
-    st.write(f"**Before date filtering: {len(df)} records**")
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    # ---- Date parsing with multiple format support ----
+    def parse_flexible_date(date_str):
+        """Parse dates in multiple formats: YYYY-MM-DD, DD-MM-YYYY, MM-DD-YYYY"""
+        if pd.isna(date_str) or date_str == "" or date_str is None:
+            return pd.NaT
+        
+        date_str = str(date_str).strip()
+        
+        # Try multiple formats
+        formats = [
+            "%Y-%m-%d",      # 2025-10-05
+            "%d-%m-%Y",      # 05-10-2025
+            "%m-%d-%Y",      # 10-05-2025
+            "%Y/%m/%d",      # 2025/10/05
+            "%d/%m/%Y",      # 05/10/2025
+            "%m/%d/%Y",      # 10/05/2025
+        ]
+        
+        for fmt in formats:
+            try:
+                return pd.to_datetime(date_str, format=fmt)
+            except (ValueError, TypeError):
+                continue
+        
+        # If all formats fail, try pandas auto-detection
+        try:
+            return pd.to_datetime(date_str, errors='coerce')
+        except:
+            return pd.NaT
     
-    # DEBUG: Check which sets have invalid dates
+    st.write(f"**Before date parsing: {len(df)} records**")
+    
+    # Apply flexible date parsing
+    df["date"] = df["date"].apply(parse_flexible_date)
+    
+    # Show info about invalid dates
     invalid_dates = df[df["date"].isna()]
     if not invalid_dates.empty:
-        st.warning(f"⚠️ Found {len(invalid_dates)} records with invalid/missing dates. They will be excluded from analysis.")
+        st.warning(f"⚠️ Found {len(invalid_dates)} records with unparseable dates.")
         sets_with_invalid_dates = invalid_dates["set_label"].value_counts()
-        st.write("**Records with invalid dates by set:**")
+        st.write("**Records with unparseable dates by set:**")
         st.write(sets_with_invalid_dates)
-        with st.expander("🔍 Show records with invalid dates", expanded=False):
+        with st.expander("🔍 Show records with unparseable dates", expanded=False):
             st.dataframe(invalid_dates[["mother_id", "date", "set_label"]].head(20))
     
-    df = df.dropna(subset=["date"]).sort_values("date")
-    st.write(f"**After date filtering: {len(df)} records remain**")
+    # Keep records even with invalid dates, but sort valid ones first
+    df = df.sort_values("date", na_position='last')
+    st.write(f"**Total records (including {len(invalid_dates)} with invalid dates): {len(df)}**")
     
     df["mortality"] = pd.to_numeric(df.get("mortality", 0), errors="coerce").fillna(0).astype(int)
 
@@ -224,7 +256,10 @@ def show_dashboard(df):
     # ===================== Charts =====================
     def safe_chart(title, df_builder):
         try:
-            chart_data, base_df = df_builder()
+            result = df_builder()
+            if result is None or result[0] is None:
+                return
+            chart_data, base_df = result
             if isinstance(base_df, pd.DataFrame) and base_df.empty:
                 st.info(f"No data for {title}.")
                 return
@@ -235,7 +270,11 @@ def show_dashboard(df):
 
     # Mortality trend
     def trend_chart():
-        t = df.groupby("date", as_index=False)["mortality"].sum()
+        # Only use records with valid dates for time-series
+        t = df[df["date"].notna()].groupby("date", as_index=False)["mortality"].sum()
+        if t.empty:
+            st.info("No valid dates available for trend chart.")
+            return None, t
         chart = (
             alt.Chart(t)
             .mark_line(point=True)
