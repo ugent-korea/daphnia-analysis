@@ -106,7 +106,7 @@ ALIASES = {
     r"^behavior\s*prior": "behavior_pre",
     r"^behavior\s*post": "behavior_post",
     r"^notes?$": "notes",
-    r"^mother\s*id": "mother_id",
+    r"^(mother\s*id|id\s*\(?\s*pk\s*\)?)$": "mother_id",  # Matches: mother id, motherid, id(pk), id (pk), ID(PK)
 }
 
 def _header_map(headers):
