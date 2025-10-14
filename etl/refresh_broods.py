@@ -41,6 +41,42 @@ def _log(msg): print(f"[ETL] {msg}", flush=True)
 def _now_iso(): return datetime.now(timezone.utc).isoformat()
 def _norm_header(h): return re.sub(r"\s+", " ", (h or "").strip()).lower()
 
+# ==== Mother ID Normalization ====
+def _canonical_mother_id(mid: str) -> str:
+    """Normalize mother_id to canonical format: LETTER.NUM.NUM_SUFFIX"""
+    if not mid or not isinstance(mid, str):
+        return ""
+    mid = mid.strip()
+    if not mid:
+        return ""
+    
+    # Split into core and suffix
+    parts = mid.split('_', 1)
+    core = parts[0]
+    suffix = parts[1] if len(parts) > 1 else ""
+    
+    # Parse core (letter + numbers)
+    m = re.match(r'^([A-Za-z]+)(.*)$', core)
+    if not m:
+        return mid  # Return as-is if doesn't match pattern
+    
+    letter = m.group(1).upper()
+    nums_part = m.group(2)
+    
+    # Extract all numbers from the nums part
+    nums = re.findall(r'\d+', nums_part)
+    
+    # Build canonical core
+    if nums:
+        canonical_core = letter + '.' + '.'.join(str(int(n)) for n in nums)
+    else:
+        canonical_core = letter
+    
+    # Reconstruct with suffix
+    if suffix:
+        return f"{canonical_core}_{suffix}"
+    return canonical_core
+
 # ==== Sheets ====
 def _authorize():
     creds = Credentials.from_service_account_info(
@@ -125,6 +161,17 @@ def _clean(df, header_map):
 
     out["mother_id"] = out["mother_id"].astype(str).map(lambda s: s.strip())
     out = out[out["mother_id"] != ""]
+    
+    # Normalize mother_id to canonical format
+    out["mother_id"] = out["mother_id"].map(_canonical_mother_id)
+    out = out[out["mother_id"] != ""]  # Remove any that failed normalization
+    
+    # Also normalize origin_mother_id if present
+    if "origin_mother_id" in out.columns:
+        out["origin_mother_id"] = out["origin_mother_id"].astype(str).map(
+            lambda s: _canonical_mother_id(s) if s and s.strip().lower() not in ("", "nan", "null") else None
+        )
+    
     return out
 
 # ==== Hash & Postgres ====

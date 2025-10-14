@@ -26,6 +26,42 @@ def _log(msg): print(f"[ETL] {msg}", flush=True)
 def _now_iso(): return datetime.now(timezone.utc).isoformat()
 def _norm_header(h): return re.sub(r"\s+", " ", (h or "").strip()).lower()
 
+# ==== Mother ID Normalization ====
+def _canonical_mother_id(mid: str) -> str:
+    """Normalize mother_id to canonical format: LETTER.NUM.NUM_SUFFIX"""
+    if not mid or not isinstance(mid, str):
+        return ""
+    mid = mid.strip()
+    if not mid:
+        return ""
+    
+    # Split into core and suffix
+    parts = mid.split('_', 1)
+    core = parts[0]
+    suffix = parts[1] if len(parts) > 1 else ""
+    
+    # Parse core (letter + numbers)
+    m = re.match(r'^([A-Za-z]+)(.*)$', core)
+    if not m:
+        return mid  # Return as-is if doesn't match pattern
+    
+    letter = m.group(1).upper()
+    nums_part = m.group(2)
+    
+    # Extract all numbers from the nums part
+    nums = re.findall(r'\d+', nums_part)
+    
+    # Build canonical core
+    if nums:
+        canonical_core = letter + '.' + '.'.join(str(int(n)) for n in nums)
+    else:
+        canonical_core = letter
+    
+    # Reconstruct with suffix
+    if suffix:
+        return f"{canonical_core}_{suffix}"
+    return canonical_core
+
 # ==== Sheets ====
 def _authorize():
     creds = Credentials.from_service_account_info(
@@ -138,6 +174,11 @@ def _clean(df, header_map):
     out["mortality"] = pd.to_numeric(out["mortality"], errors="coerce").fillna(0).astype(int)
     out["mother_id"] = out["mother_id"].astype(str).str.strip()
     out = out[out["mother_id"] != ""]
+    
+    # CRITICAL: Normalize mother_id to canonical format (same as broods table)
+    out["mother_id"] = out["mother_id"].map(_canonical_mother_id)
+    out = out[out["mother_id"] != ""]  # Remove any that failed normalization
+    
     return out
 
 # ==== Hash ====
@@ -146,9 +187,32 @@ def _hash_df(df):
 
 # ==== Write ====
 def _write_records(conn, df: pd.DataFrame):
+    df_orig = df.copy()
     df = df.reindex(columns=CANON_COLS, fill_value=None)
+    _log(f"Records before filtering: {len(df)}")
+    
     valid_ids = {r[0] for r in conn.execute(text("SELECT mother_id FROM broods"))}
+    _log(f"Valid mother_ids in broods table: {len(valid_ids)}")
+    
+    # Check for mismatches BEFORE filtering
+    records_ids = set(df["mother_id"].dropna().unique())
+    matching_ids = records_ids & valid_ids
+    missing_ids = records_ids - valid_ids
+    
+    _log(f"Unique mother_ids in records: {len(records_ids)}")
+    _log(f"Matching mother_ids: {len(matching_ids)}")
+    _log(f"Missing mother_ids (not in broods): {len(missing_ids)}")
+    
+    if missing_ids:
+        _log(f"Sample of missing IDs: {list(missing_ids)[:10]}")
+    
     df = df[df["mother_id"].isin(valid_ids)]
+    _log(f"Records after filtering by valid mother_ids: {len(df)}")
+    
+    if len(df) == 0:
+        _log("WARNING: No records match valid mother_ids!")
+        _log(f"Sample mother_ids from records (normalized): {list(records_ids)[:10]}")
+        _log(f"Sample mother_ids from broods: {list(valid_ids)[:10]}")
 
     conn.execute(text("DROP TABLE IF EXISTS records_tmp"))
     conn.execute(text("CREATE TABLE records_tmp (LIKE records INCLUDING ALL)"))
@@ -171,6 +235,8 @@ def _write_records(conn, df: pd.DataFrame):
     conn.execute(text("TRUNCATE TABLE records"))
     conn.execute(text("INSERT INTO records SELECT * FROM records_tmp"))
     conn.execute(text("DROP TABLE records_tmp"))
+    
+    _log(f"Successfully inserted {len(records)} records into database")
 
 # ==== Main ====
 def main():
