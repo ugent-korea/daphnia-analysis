@@ -197,7 +197,7 @@ def _write_broods(conn, df: pd.DataFrame):
             )
         """), records)
 
-    conn.execute(text("TRUNCATE TABLE broods"))
+    conn.execute(text("TRUNCATE TABLE broods CASCADE"))
     conn.execute(text("""
       INSERT INTO broods
       SELECT mother_id,hierarchy_id,origin_mother_id,n_i,birth_date,death_date,
