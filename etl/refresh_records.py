@@ -279,7 +279,18 @@ def _write_records(conn, df: pd.DataFrame):
         """), records)
 
     conn.execute(text("TRUNCATE TABLE records"))
-    conn.execute(text("INSERT INTO records SELECT * FROM records_tmp"))
+    conn.execute(text("""
+        INSERT INTO records(
+            date, life_stage, mortality, cause_of_death, disease,
+            medium_condition, egg_development, behavior_pre, behavior_post,
+            notes, mother_id, set_label, assigned_person
+        )
+        SELECT 
+            date, life_stage, mortality, cause_of_death, disease,
+            medium_condition, egg_development, behavior_pre, behavior_post,
+            notes, mother_id, set_label, assigned_person
+        FROM records_tmp
+    """))
     conn.execute(text("DROP TABLE records_tmp"))
     
     _log(f"Successfully inserted {len(records)} records into database")
