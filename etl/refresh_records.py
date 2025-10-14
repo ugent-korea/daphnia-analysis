@@ -242,8 +242,26 @@ def _write_records(conn, df: pd.DataFrame):
         _log(f"Sample mother_ids from records (normalized): {list(records_ids)[:10]}")
         _log(f"Sample mother_ids from broods: {list(valid_ids)[:10]}")
 
+    # Drop and recreate temp table with explicit schema (don't use LIKE which copies old schema)
     conn.execute(text("DROP TABLE IF EXISTS records_tmp"))
-    conn.execute(text("CREATE TABLE records_tmp (LIKE records INCLUDING ALL)"))
+    conn.execute(text("""
+    CREATE TABLE records_tmp(
+      id SERIAL PRIMARY KEY,
+      date TEXT,
+      life_stage TEXT,
+      mortality INTEGER,
+      cause_of_death TEXT,
+      disease TEXT,
+      medium_condition TEXT,
+      egg_development TEXT,
+      behavior_pre TEXT,
+      behavior_post TEXT,
+      notes TEXT,
+      mother_id TEXT,
+      set_label TEXT,
+      assigned_person TEXT
+    )
+    """))
 
     records = df.to_dict(orient="records")
     if records:
