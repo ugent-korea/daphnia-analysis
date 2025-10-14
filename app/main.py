@@ -31,47 +31,37 @@ MOINA_PAGES = {
 
 st.sidebar.title("Navigation")
 
-# Initialize session state for radio selections
+# Initialize session state for page selection
 if "selected_page" not in st.session_state:
     st.session_state.selected_page = "Code Generator"
     st.session_state.selected_species = "daphnia"
 
+# Create a simple vertical menu
 st.sidebar.markdown("### Daphnia magna")
-daphnia_selection = st.sidebar.radio(
-    "Select Daphnia page:",
-    list(DAPHNIA_PAGES.keys()),
-    index=list(DAPHNIA_PAGES.keys()).index(st.session_state.selected_page) 
-          if st.session_state.selected_species == "daphnia" 
-          else 0,
-    label_visibility="collapsed",
-    key="daphnia_radio",
-)
+for page_name in DAPHNIA_PAGES.keys():
+    if st.sidebar.button(
+        page_name, 
+        key=f"daphnia_{page_name}",
+        use_container_width=True,
+        type="primary" if (st.session_state.selected_species == "daphnia" and st.session_state.selected_page == page_name) else "secondary"
+    ):
+        st.session_state.selected_species = "daphnia"
+        st.session_state.selected_page = page_name
+        st.rerun()
 
 st.sidebar.markdown("---")
 
 st.sidebar.markdown("### Moina")
-moina_selection = st.sidebar.radio(
-    "Select Moina page:",
-    list(MOINA_PAGES.keys()),
-    index=list(MOINA_PAGES.keys()).index(st.session_state.selected_page) 
-          if st.session_state.selected_species == "moina" 
-          else 0,
-    label_visibility="collapsed",
-    key="moina_radio",
-)
-
-# Detect which radio button changed
-if st.session_state.get("prev_daphnia") != daphnia_selection:
-    st.session_state.selected_species = "daphnia"
-    st.session_state.selected_page = daphnia_selection
-    
-if st.session_state.get("prev_moina") != moina_selection:
-    st.session_state.selected_species = "moina"
-    st.session_state.selected_page = moina_selection
-
-# Store previous values for next comparison
-st.session_state.prev_daphnia = daphnia_selection
-st.session_state.prev_moina = moina_selection
+for page_name in MOINA_PAGES.keys():
+    if st.sidebar.button(
+        page_name,
+        key=f"moina_{page_name}",
+        use_container_width=True,
+        type="primary" if (st.session_state.selected_species == "moina" and st.session_state.selected_page == page_name) else "secondary"
+    ):
+        st.session_state.selected_species = "moina"
+        st.session_state.selected_page = page_name
+        st.rerun()
 
 # Render the selected page
 if st.session_state.selected_species == "daphnia":

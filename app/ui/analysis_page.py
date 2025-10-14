@@ -74,8 +74,8 @@ def render():
         st.warning("⚠️ No records found in the database.")
         st.stop()
 
-    # ---- DEBUG: Show what we loaded ----
-    with st.expander("🔍 Debug: Data Loading Info", expanded=False):
+    # ---- Optional: Advanced Debug Info ----
+    with st.expander("🔧 Advanced Debug Info (Click to expand)", expanded=False):
         st.write(f"**Loaded {len(broods_df)} broods and {len(records)} records**")
         st.write("**Sample broods (before normalization):**")
         st.dataframe(broods_df[["mother_id", "set_label", "assigned_person"]].head(10))
@@ -85,16 +85,8 @@ def render():
         # Show unique sets in broods
         unique_sets_raw = broods_df["set_label"].dropna().unique()
         st.write(f"**Unique set_labels in broods (raw):** {sorted(unique_sets_raw)}")
-
-    # ---- Normalize IDs using canonical format ----
-    records["mother_id_original"] = records["mother_id"]  # Keep original for debugging
-    broods_df["mother_id_original"] = broods_df["mother_id"]  # Keep original for debugging
-    
-    records["mother_id"] = records["mother_id"].map(normalize_mother_id)
-    broods_df["mother_id"] = broods_df["mother_id"].map(normalize_mother_id)
-    
-    # ---- DEBUG: Show normalization results ----
-    with st.expander("🔍 Debug: ID Normalization", expanded=False):
+        
+        # Show normalization
         st.write("**Sample normalized IDs:**")
         comparison = pd.DataFrame({
             "Original (broods)": broods_df["mother_id_original"].head(10).values,
@@ -102,79 +94,60 @@ def render():
         })
         st.dataframe(comparison)
 
-    # ---- Merge records ↔ broods (exact like connectivity test) ----
+    # ---- Normalize IDs using canonical format ----
+    records["mother_id_original"] = records["mother_id"]  # Keep original for debugging
+    broods_df["mother_id_original"] = broods_df["mother_id"]  # Keep original for debugging
+    
+    records["mother_id"] = records["mother_id"].map(normalize_mother_id)
+    broods_df["mother_id"] = broods_df["mother_id"].map(normalize_mother_id)
+
+    # ---- Merge records ↔ broods ----
     df = records.merge(broods_df, on="mother_id", how="left", indicator=True)
 
-    # ---- Debug info for mismatches ----
+    # ---- Check for merge issues (only show if problems exist) ----
     missing_sets = df[df["_merge"] != "both"].copy()
     if not missing_sets.empty:
-        st.warning("⚠️ Some records did not match any broods. Debug info below:")
-        st.dataframe(
-            missing_sets[["mother_id", "_merge", "set_label", "assigned_person"]].head(20),
-            use_container_width=True,
-        )
-
-    # check for missing set_labels explicitly
-    missing_label = df[df["set_label"].isna()]
-    if not missing_label.empty:
-        st.info(
-            f"ℹ️ {len(missing_label)} records have no set_label assigned after merge. "
-            "Displaying a few examples below."
-        )
-        st.dataframe(missing_label[["mother_id", "date", "mortality"]].head(20))
+        with st.expander("⚠️ Data Merge Warning - Click to see details", expanded=False):
+            st.warning(f"Found {len(missing_sets)} records that did not match any broods.")
+            st.dataframe(
+                missing_sets[["mother_id", "_merge", "set_label", "assigned_person"]].head(20),
+                use_container_width=True,
+            )
 
     # ---- Fill unknowns for visualization ----
     df["set_label"] = df["set_label"].fillna("Unknown")
     broods_df["set_label"] = broods_df["set_label"].fillna("Unknown")
 
-    # ---- Date parsing with multiple format support ----
-    def parse_flexible_date(date_str):
-        """Parse dates in multiple formats: YYYY-MM-DD, DD-MM-YYYY, MM-DD-YYYY"""
-        if pd.isna(date_str) or date_str == "" or date_str is None:
+    # ---- Date parsing - handle NULL/empty dates gracefully ----
+    def parse_date_safe(date_val):
+        """Parse date, return NaT for NULL/empty values"""
+        if pd.isna(date_val) or date_val == "" or date_val is None:
             return pd.NaT
         
-        date_str = str(date_str).strip()
+        date_str = str(date_val).strip()
+        if date_str.upper() in ["NULL", "NA", "N/A", "NONE", ""]:
+            return pd.NaT
         
-        # Try multiple formats
-        formats = [
-            "%Y-%m-%d",      # 2025-10-05
-            "%d-%m-%Y",      # 05-10-2025
-            "%m-%d-%Y",      # 10-05-2025
-            "%Y/%m/%d",      # 2025/10/05
-            "%d/%m/%Y",      # 05/10/2025
-            "%m/%d/%Y",      # 10/05/2025
-        ]
-        
-        for fmt in formats:
-            try:
-                return pd.to_datetime(date_str, format=fmt)
-            except (ValueError, TypeError):
-                continue
-        
-        # If all formats fail, try pandas auto-detection
+        # Try pandas auto-detection (handles YYYY-MM-DD, DD-MM-YYYY, etc.)
         try:
             return pd.to_datetime(date_str, errors='coerce')
         except:
             return pd.NaT
     
-    st.write(f"**Before date parsing: {len(df)} records**")
+    # Apply date parsing
+    df["date"] = df["date"].apply(parse_date_safe)
     
-    # Apply flexible date parsing
-    df["date"] = df["date"].apply(parse_flexible_date)
+    # Store debug info for later (show at bottom if needed)
+    records_without_dates = df[df["date"].isna()]
+    debug_info = {
+        "total_records": len(df),
+        "records_with_dates": df['date'].notna().sum(),
+        "records_without_dates": len(records_without_dates),
+        "sets_without_dates": records_without_dates["set_label"].value_counts() if not records_without_dates.empty else None
+    }
     
-    # Show info about invalid dates
-    invalid_dates = df[df["date"].isna()]
-    if not invalid_dates.empty:
-        st.warning(f"⚠️ Found {len(invalid_dates)} records with unparseable dates.")
-        sets_with_invalid_dates = invalid_dates["set_label"].value_counts()
-        st.write("**Records with unparseable dates by set:**")
-        st.write(sets_with_invalid_dates)
-        with st.expander("🔍 Show records with unparseable dates", expanded=False):
-            st.dataframe(invalid_dates[["mother_id", "date", "set_label"]].head(20))
-    
-    # Keep records even with invalid dates, but sort valid ones first
+    # Keep ALL records, sort by date (NaT goes to end)
     df = df.sort_values("date", na_position='last')
-    st.write(f"**Total records (including {len(invalid_dates)} with invalid dates): {len(df)}**")
     
     df["mortality"] = pd.to_numeric(df.get("mortality", 0), errors="coerce").fillna(0).astype(int)
 
@@ -196,10 +169,6 @@ def render():
         st.warning("⚠️ No set_label values found in broods table — check broods metadata.")
         st.dataframe(broods_df[["mother_id", "set_label"]].head(20), use_container_width=True)
         st.stop()
-    
-    # Debug: Show which sets have records
-    sets_with_records = sorted(df[df["set_label"] != "Unknown"]["set_label"].dropna().unique().tolist())
-    st.info(f"📊 Found {len(all_sets_in_broods)} total sets in broods. Sets with records: {', '.join(sets_with_records) if sets_with_records else 'None yet'}")
     
     all_sets = all_sets_in_broods
 
@@ -227,13 +196,13 @@ def render():
             if df_sub.empty:
                 st.info("⚠️ No records logged for this set yet.")
             else:
-                show_dashboard(df_sub)
+                show_dashboard(df_sub, set_name if i > 0 else "Cumulative")
 
 
 # ===========================================================
 # DASHBOARD COMPONENT
 # ===========================================================
-def show_dashboard(df):
+def show_dashboard(df, set_name=""):
     total_records = len(df)
     unique_mothers = df["mother_id"].nunique()
 
@@ -245,7 +214,7 @@ def show_dashboard(df):
     )
     avg_life_expectancy = df_life["days_alive"].mean().round(1) if not df_life.empty else 0
 
-    # KPIs (removed Total Mortality)
+    # KPIs
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Records", f"{total_records:,}")
     c2.metric("Unique Mothers", f"{unique_mothers:,}")
@@ -255,26 +224,29 @@ def show_dashboard(df):
 
     # ===================== Charts =====================
     def safe_chart(title, df_builder):
+        """Safely render a chart, showing user-friendly error if it fails"""
         try:
             result = df_builder()
             if result is None or result[0] is None:
                 return
             chart_data, base_df = result
             if isinstance(base_df, pd.DataFrame) and base_df.empty:
-                st.info(f"No data for {title}.")
+                st.info(f"📊 {title}: No data available")
                 return
             st.subheader(title)
             st.altair_chart(chart_data, use_container_width=True)
         except Exception as e:
-            st.error(f"Chart error ({title}): {e}")
+            st.warning(f"📊 {title}: Unable to display chart (data format issue)")
+            # Only show technical details in expander
+            with st.expander("🔧 Technical details", expanded=False):
+                st.code(str(e))
 
     # Mortality trend
     def trend_chart():
         # Only use records with valid dates for time-series
         t = df[df["date"].notna()].groupby("date", as_index=False)["mortality"].sum()
         if t.empty:
-            st.info("No valid dates available for trend chart.")
-            return None, t
+            return None, t  # Return None to trigger "No data available" message
         chart = (
             alt.Chart(t)
             .mark_line(point=True)
@@ -366,5 +338,21 @@ def show_dashboard(df):
     safe_chart("⚰️ Mortality by Life Stage", mort_stage_chart)
 
     st.divider()
+    
+    # ===================== Debug Info (only if there are issues) =====================
+    records_without_dates = df[df["date"].isna()]
+    has_issues = not records_without_dates.empty
+    
+    if has_issues:
+        with st.expander("🔍 Data Quality Info", expanded=False):
+            st.markdown("#### Records Without Dates")
+            st.write(f"Found **{len(records_without_dates)}** records with missing dates in this set.")
+            st.caption("These records are included in non-time-series charts but excluded from trend analysis.")
+            st.dataframe(
+                records_without_dates[["mother_id", "date", "life_stage", "mortality"]].head(10),
+                use_container_width=True
+            )
+    
+    # ===================== Raw Data Preview =====================
     st.subheader("📋 Raw Data Preview")
-    st.dataframe(df.sort_values("date").reset_index(drop=True), use_container_width=True, height=400)
+    st.dataframe(df.sort_values("date", na_position='last').reset_index(drop=True), use_container_width=True, height=400)
