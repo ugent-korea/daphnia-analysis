@@ -128,8 +128,22 @@ def render():
     broods_df["set_label"] = broods_df["set_label"].fillna("Unknown")
 
     # ---- Date + cleaning ----
+    st.write(f"**Before date filtering: {len(df)} records**")
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    
+    # DEBUG: Check which sets have invalid dates
+    invalid_dates = df[df["date"].isna()]
+    if not invalid_dates.empty:
+        st.warning(f"⚠️ Found {len(invalid_dates)} records with invalid/missing dates. They will be excluded from analysis.")
+        sets_with_invalid_dates = invalid_dates["set_label"].value_counts()
+        st.write("**Records with invalid dates by set:**")
+        st.write(sets_with_invalid_dates)
+        with st.expander("🔍 Show records with invalid dates", expanded=False):
+            st.dataframe(invalid_dates[["mother_id", "date", "set_label"]].head(20))
+    
     df = df.dropna(subset=["date"]).sort_values("date")
+    st.write(f"**After date filtering: {len(df)} records remain**")
+    
     df["mortality"] = pd.to_numeric(df.get("mortality", 0), errors="coerce").fillna(0).astype(int)
 
     # ---- Text cleaning ----
