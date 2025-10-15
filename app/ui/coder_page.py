@@ -5,11 +5,30 @@ def render():
     st.title("Daphnia Coding Protocol")
     st.markdown("### Daphnia Magna TEAM 2.0")
 
-    meta = database.get_data()["meta"]
-    st.caption(
-        f"Last refresh (KST): {utils.last_refresh_kst(meta, 'broods_last_refresh')} • "
-        f"Rows: {meta.get('broods_row_count', '?')} • Schema: {meta.get('broods_schema', 'unknown').capitalize()}"
-    )
+    # Load metadata with error handling
+    try:
+        data = database.get_data()
+        meta = data.get("meta", {})
+        
+        # Check if meta is empty (ETL hasn't run yet)
+        if not meta or 'broods_last_refresh' not in meta:
+            st.caption("Last refresh (KST): Not yet synced • Rows: 0 • Schema: Broods")
+            st.info("💡 Database not yet populated. Run the ETL workflow to sync data from Google Sheets.")
+            return
+        
+        # Get metadata values
+        last_refresh = utils.last_refresh_kst(meta, 'broods_last_refresh')
+        row_count = meta.get('broods_row_count', '0')
+        schema = meta.get('broods_schema', 'broods')
+        
+        st.caption(
+            f"Last refresh (KST): {last_refresh} • "
+            f"Rows: {row_count} • Schema: {schema.capitalize()}"
+        )
+    except Exception as e:
+        st.caption("Last refresh (KST): Error loading • Rows: ? • Schema: Broods")
+        st.error(f"❌ Failed to load database metadata: {e}")
+        return
 
     mother_input = st.text_input(
         "Enter MotherID (core or full)", placeholder="e.g., E.1 or E.1_0804"

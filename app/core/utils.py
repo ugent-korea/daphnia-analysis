@@ -193,28 +193,18 @@ def prepare_analysis_data(records: pd.DataFrame, broods: pd.DataFrame) -> pd.Dat
     return df
 
 
-def calculate_metrics(df: pd.DataFrame) -> dict:
+def calculate_metrics(df: pd.DataFrame, current_df: pd.DataFrame = None, broods_df: pd.DataFrame = None) -> dict:
     """Calculate summary metrics for a dataset."""
     total_records = len(df)
     unique_mothers = df["mother_id"].nunique()
     
-    # Calculate life expectancy
-    df_life = (
-        df.groupby("mother_id")["date"]
-        .agg(["min", "max"])
-        .dropna()
-        .assign(days_alive=lambda x: (x["max"] - x["min"]).dt.days)
-    )
-    
-    avg_life_expectancy = (
-        df_life["days_alive"].mean().round(1) 
-        if not df_life.empty else 0
-    )
+    # Count active broods from current table
+    active_broods = len(current_df) if current_df is not None and not current_df.empty else 0
     
     return {
         "total_records": total_records,
         "unique_mothers": unique_mothers,
-        "avg_life_expectancy": avg_life_expectancy,
+        "active_broods": active_broods,
         "records_with_dates": df["date"].notna().sum(),
         "records_without_dates": df["date"].isna().sum(),
     }

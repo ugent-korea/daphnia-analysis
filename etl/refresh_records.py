@@ -18,7 +18,7 @@ SET_TITLE_RE        = re.compile(r"^set\s+([a-z])(?:\s*\(([^)]*)\))?", re.IGNORE
 CANON_COLS = [
     "date", "life_stage", "mortality", "cause_of_death", "disease",
     "medium_condition", "egg_development", "behavior_pre", "behavior_post",
-    "notes", "mother_id", "set_label", "assigned_person"
+    "notes", "mother_id", "set_label", "assigned_person", "brooder"
 ]
 
 # ==== Logging ====
@@ -107,6 +107,7 @@ ALIASES = {
     r"^behavior\s*(post|after)\s*(feeding)?$": "behavior_post",
     r"^notes?$": "notes",
     r"^(mother\s*id|id\s*\(?\s*pk\s*\)?)$": "mother_id",  # Matches: mother id, motherid, id(pk), id (pk), ID(PK)
+    r"^brooder$": "brooder",  # NEW: Brooder column - person's name who is brooding
 }
 
 def _header_map(headers):
@@ -153,7 +154,8 @@ def _ensure_schema(conn):
       notes TEXT,
       mother_id TEXT REFERENCES broods(mother_id),
       set_label TEXT,
-      assigned_person TEXT
+      assigned_person TEXT,
+      brooder TEXT
     )
     """))
     
@@ -179,6 +181,19 @@ def _ensure_schema(conn):
             WHERE table_name='records' AND column_name='assigned_person'
         ) THEN
             ALTER TABLE records ADD COLUMN assigned_person TEXT;
+        END IF;
+    END $$;
+    """))
+    
+    # Add brooder column if it doesn't exist (for old databases)
+    conn.execute(text("""
+    DO $$ 
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name='records' AND column_name='brooder'
+        ) THEN
+            ALTER TABLE records ADD COLUMN brooder TEXT;
         END IF;
     END $$;
     """))
@@ -259,7 +274,8 @@ def _write_records(conn, df: pd.DataFrame):
       notes TEXT,
       mother_id TEXT,
       set_label TEXT,
-      assigned_person TEXT
+      assigned_person TEXT,
+      brooder TEXT
     )
     """))
 
@@ -269,12 +285,12 @@ def _write_records(conn, df: pd.DataFrame):
             INSERT INTO records_tmp(
               date,life_stage,mortality,cause_of_death,disease,
               medium_condition,egg_development,behavior_pre,behavior_post,
-              notes,mother_id,set_label,assigned_person
+              notes,mother_id,set_label,assigned_person,brooder
             )
             VALUES (
               :date,:life_stage,:mortality,:cause_of_death,:disease,
               :medium_condition,:egg_development,:behavior_pre,:behavior_post,
-              :notes,:mother_id,:set_label,:assigned_person
+              :notes,:mother_id,:set_label,:assigned_person,:brooder
             )
         """), records)
 
@@ -283,12 +299,12 @@ def _write_records(conn, df: pd.DataFrame):
         INSERT INTO records(
             date, life_stage, mortality, cause_of_death, disease,
             medium_condition, egg_development, behavior_pre, behavior_post,
-            notes, mother_id, set_label, assigned_person
+            notes, mother_id, set_label, assigned_person, brooder
         )
         SELECT 
             date, life_stage, mortality, cause_of_death, disease,
             medium_condition, egg_development, behavior_pre, behavior_post,
-            notes, mother_id, set_label, assigned_person
+            notes, mother_id, set_label, assigned_person, brooder
         FROM records_tmp
     """))
     conn.execute(text("DROP TABLE records_tmp"))

@@ -27,10 +27,25 @@ def _ensure_schema(conn):
       notes TEXT,
       mother_id TEXT REFERENCES broods(mother_id),
       set_label TEXT,
-      assigned_person TEXT
+      assigned_person TEXT,
+      brooder TEXT
     )
     """))
-    _log("Schema ensured: current table exists")
+    
+    # Add brooder column if it doesn't exist (for old databases)
+    conn.execute(text("""
+    DO $$ 
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name='current' AND column_name='brooder'
+        ) THEN
+            ALTER TABLE current ADD COLUMN brooder TEXT;
+        END IF;
+    END $$;
+    """))
+    
+    _log("Schema ensured: current table exists with brooder column")
 
 # ==== Main Logic ====
 def main():
@@ -76,7 +91,7 @@ def main():
             SELECT 
                 date, life_stage, mortality, cause_of_death, disease,
                 medium_condition, egg_development, behavior_pre, behavior_post,
-                notes, mother_id, set_label, assigned_person
+                notes, mother_id, set_label, assigned_person, brooder
             FROM ranked_records
             WHERE rn = 1
         """)
@@ -97,12 +112,12 @@ def main():
                 INSERT INTO current(
                     date, life_stage, mortality, cause_of_death, disease,
                     medium_condition, egg_development, behavior_pre, behavior_post,
-                    notes, mother_id, set_label, assigned_person
+                    notes, mother_id, set_label, assigned_person, brooder
                 )
                 VALUES (
                     :date, :life_stage, :mortality, :cause_of_death, :disease,
                     :medium_condition, :egg_development, :behavior_pre, :behavior_post,
-                    :notes, :mother_id, :set_label, :assigned_person
+                    :notes, :mother_id, :set_label, :assigned_person, :brooder
                 )
             """)
             

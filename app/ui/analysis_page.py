@@ -10,7 +10,7 @@ def render():
 
     # Load data
     try:
-        broods_df, records_df = _load_and_validate_data()
+        broods_df, records_df, current_df = _load_and_validate_data()
     except Exception as e:
         st.error(f"❌ Failed to load data: {e}")
         return
@@ -37,11 +37,11 @@ def render():
         st.stop()
 
     # Render tabs for cumulative and individual sets
-    _render_analysis_tabs(df, broods_df, all_sets)
+    _render_analysis_tabs(df, broods_df, current_df, all_sets)
 
 
 def _load_and_validate_data():
-    """Load broods and records data from database."""
+    """Load broods, records, and current data from database."""
     # Load broods
     data = database.get_data()
     by_full = data.get("by_full", {})
@@ -52,7 +52,14 @@ def _load_and_validate_data():
     # Load records
     records_df = database.get_records()
     
-    return broods_df, records_df
+    # Load current (alive broods)
+    try:
+        current_df = database.get_current()
+    except Exception as e:
+        st.warning(f"⚠️ Current table not yet available: {e}")
+        current_df = pd.DataFrame()
+    
+    return broods_df, records_df, current_df
 
 
 def _render_debug_panel(broods_df: pd.DataFrame, records_df: pd.DataFrame):
@@ -100,7 +107,7 @@ def _get_all_sets_from_broods(broods_df: pd.DataFrame) -> list:
     return all_sets
 
 
-def _render_analysis_tabs(df: pd.DataFrame, broods_df: pd.DataFrame, all_sets: list):
+def _render_analysis_tabs(df: pd.DataFrame, broods_df: pd.DataFrame, current_df: pd.DataFrame, all_sets: list):
     """Render tabs for cumulative and individual set analysis."""
     tabs = st.tabs(["🌍 Cumulative"] + [f"Set {s}" for s in all_sets])
 
@@ -109,13 +116,15 @@ def _render_analysis_tabs(df: pd.DataFrame, broods_df: pd.DataFrame, all_sets: l
             if i == 0:
                 # Cumulative tab
                 df_sub = df
+                current_sub = current_df
                 assigned_person = "All Researchers"
                 st.markdown("### 🌍 Cumulative Overview (All Sets Combined)")
-                _render_dashboard(df_sub, "Cumulative")
+                _render_dashboard(df_sub, current_sub, broods_df, "Cumulative")
             else:
                 # Individual set tab
                 set_name = all_sets[i - 1]
                 df_sub = df[df["set_label"] == set_name]
+                current_sub = current_df[current_df["set_label"] == set_name] if not current_df.empty else pd.DataFrame()
                 assigned_person = _get_assigned_person(broods_df, set_name)
                 
                 st.markdown(f"### 🧬 Set {set_name} Overview")
@@ -124,7 +133,7 @@ def _render_analysis_tabs(df: pd.DataFrame, broods_df: pd.DataFrame, all_sets: l
                 if df_sub.empty:
                     st.info("⚠️ No records logged for this set yet.")
                 else:
-                    _render_dashboard(df_sub, set_name)
+                    _render_dashboard(df_sub, current_sub, broods_df, set_name)
 
 
 def _get_assigned_person(broods_df: pd.DataFrame, set_name: str) -> str:
@@ -137,16 +146,19 @@ def _get_assigned_person(broods_df: pd.DataFrame, set_name: str) -> str:
     return assigned_person[0] if len(assigned_person) > 0 else "Unassigned"
 
 
-def _render_dashboard(df: pd.DataFrame, set_name: str):
+def _render_dashboard(df: pd.DataFrame, current_df: pd.DataFrame, broods_df: pd.DataFrame, set_name: str):
     """Render complete dashboard for a dataset."""
     # Calculate and display metrics
-    metrics = utils.calculate_metrics(df)
+    metrics = utils.calculate_metrics(df, current_df, broods_df)
     _render_kpis(metrics)
+    
+    # Render life stage breakdown (second row of cards)
+    _render_life_stage_cards(current_df)
     
     st.divider()
     
     # Render all charts
-    _render_all_charts(df)
+    _render_all_charts(df, broods_df)
     
     st.divider()
     
@@ -161,12 +173,35 @@ def _render_kpis(metrics: dict):
     """Render KPI metrics in columns."""
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Records", f"{metrics['total_records']:,}")
-    c2.metric("Unique Mothers", f"{metrics['unique_mothers']:,}")
-    c3.metric("Avg Life Expectancy (days)", f"{metrics['avg_life_expectancy']}")
+    c2.metric("Unique Mothers / Active Broods", f"{metrics['unique_mothers']:,} / {metrics['active_broods']:,}")
+    c3.metric("Records with Dates", f"{metrics['records_with_dates']:,}")
 
 
-def _render_all_charts(df: pd.DataFrame):
+def _render_life_stage_cards(current_df: pd.DataFrame):
+    """Render life stage breakdown cards for alive broods."""
+    if current_df.empty:
+        st.info("⚠️ No alive broods data available yet")
+        return
+    
+    # Count life stages from current table
+    life_stage_counts = current_df["life_stage"].fillna("unknown").str.strip().str.lower().value_counts()
+    
+    adults = life_stage_counts.get("adult", 0)
+    adolescents = life_stage_counts.get("adolescent", 0)
+    neonates = life_stage_counts.get("neonate", 0)
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("🟢 Adults Alive", f"{adults:,}")
+    c2.metric("🟡 Adolescents Alive", f"{adolescents:,}")
+    c3.metric("🔵 Neonates Alive", f"{neonates:,}")
+
+
+def _render_all_charts(df: pd.DataFrame, broods_df: pd.DataFrame):
     """Render all analysis charts using the visualizations module."""
+    # First, render the life expectancy distribution chart for dead broods
+    _render_life_expectancy_distribution(df, broods_df)
+    
+    # Then render all other charts
     for chart_def in visualizations.CHART_DEFINITIONS:
         _render_safe_chart(
             title=chart_def["title"],
@@ -219,3 +254,70 @@ def _render_raw_data_preview(df: pd.DataFrame):
         use_container_width=True, 
         height=400
     )
+
+
+def _render_life_expectancy_distribution(df: pd.DataFrame, broods_df: pd.DataFrame):
+    """Render life expectancy distribution chart for dead broods."""
+    import altair as alt
+    
+    st.subheader("📊 Life Expectancy Distribution (Dead Broods)")
+    
+    # Filter for dead broods (those with death_date)
+    dead_broods = broods_df[
+        (broods_df["death_date"].notna()) & 
+        (broods_df["death_date"] != "") &
+        (broods_df["death_date"].str.strip() != "")
+    ].copy()
+    
+    if dead_broods.empty:
+        st.info("📊 No dead broods found yet - life expectancy data will appear here once broods complete their lifecycle")
+        return
+    
+    # Parse birth and death dates
+    dead_broods["birth_date_parsed"] = dead_broods["birth_date"].apply(utils.parse_date_safe)
+    dead_broods["death_date_parsed"] = dead_broods["death_date"].apply(utils.parse_date_safe)
+    
+    # Calculate life expectancy in days
+    dead_broods["life_expectancy_days"] = (
+        dead_broods["death_date_parsed"] - dead_broods["birth_date_parsed"]
+    ).dt.days
+    
+    # Filter out invalid calculations
+    dead_broods_valid = dead_broods[
+        (dead_broods["life_expectancy_days"].notna()) &
+        (dead_broods["life_expectancy_days"] >= 0)
+    ].copy()
+    
+    if dead_broods_valid.empty:
+        st.warning("⚠️ Could not calculate life expectancy - check birth/death date formats")
+        return
+    
+    # Create histogram
+    chart = alt.Chart(dead_broods_valid).mark_bar(
+        opacity=0.7,
+        color="#4CAF50"
+    ).encode(
+        x=alt.X(
+            "life_expectancy_days:Q",
+            bin=alt.Bin(maxbins=20),
+            title="Life Expectancy (days)"
+        ),
+        y=alt.Y(
+            "count()",
+            title="Number of Broods"
+        ),
+        tooltip=[
+            alt.Tooltip("life_expectancy_days:Q", bin=True, title="Days"),
+            alt.Tooltip("count()", title="Count")
+        ]
+    ).properties(
+        height=300
+    )
+    
+    st.altair_chart(chart, use_container_width=True)
+    
+    # Show statistics
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Dead Broods", f"{len(dead_broods_valid):,}")
+    col2.metric("Avg Life Expectancy", f"{dead_broods_valid['life_expectancy_days'].mean():.1f} days")
+    col3.metric("Max Life Expectancy", f"{dead_broods_valid['life_expectancy_days'].max():.0f} days")
