@@ -25,9 +25,9 @@ DAPHNIA_PAGES = {
     "Test Connectivity": test_connectivity,
 }
 
-MOINA_PAGES = {
-    "Moina Analysis": test_connectivity,  # placeholder
-}
+# MOINA_PAGES = {
+#     "Moina Analysis": test_connectivity,  # placeholder
+# }
 
 st.sidebar.title("Navigation")
 
@@ -36,35 +36,41 @@ if "selected_page" not in st.session_state:
     st.session_state.selected_page = "Daphnia Code Generator"
     st.session_state.selected_species = "daphnia"
 
-# Create a simple vertical menu
+# ---- Daphnia section ----
 st.sidebar.markdown("### Daphnia magna")
 for page_name in DAPHNIA_PAGES.keys():
     if st.sidebar.button(
-        page_name, 
+        page_name,
         key=f"daphnia_{page_name}",
         use_container_width=True,
-        type="primary" if (st.session_state.selected_species == "daphnia" and st.session_state.selected_page == page_name) else "secondary"
+        type="primary" if (
+            st.session_state.selected_species == "daphnia"
+            and st.session_state.selected_page == page_name
+        ) else "secondary"
     ):
         st.session_state.selected_species = "daphnia"
         st.session_state.selected_page = page_name
         st.rerun()
 
-st.sidebar.markdown("---")
+# ---- Commented Moina section ----
+# st.sidebar.markdown("---")
+# st.sidebar.markdown("### Moina")
+# for page_name in MOINA_PAGES.keys():
+#     if st.sidebar.button(
+#         page_name,
+#         key=f"moina_{page_name}",
+#         use_container_width=True,
+#         type="primary" if (
+#             st.session_state.selected_species == "moina"
+#             and st.session_state.selected_page == page_name
+#         ) else "secondary"
+#     ):
+#         st.session_state.selected_species = "moina"
+#         st.session_state.selected_page = page_name
+#         st.rerun()
 
-st.sidebar.markdown("### Moina")
-for page_name in MOINA_PAGES.keys():
-    if st.sidebar.button(
-        page_name,
-        key=f"moina_{page_name}",
-        use_container_width=True,
-        type="primary" if (st.session_state.selected_species == "moina" and st.session_state.selected_page == page_name) else "secondary"
-    ):
-        st.session_state.selected_species = "moina"
-        st.session_state.selected_page = page_name
-        st.rerun()
-
-# Render the selected page
+# ---- Render selected page ----
 if st.session_state.selected_species == "daphnia":
     DAPHNIA_PAGES[st.session_state.selected_page].render()
-else:
-    MOINA_PAGES[st.session_state.selected_page].render()
+# else:
+#     MOINA_PAGES[st.session_state.selected_page].render()
