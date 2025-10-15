@@ -33,7 +33,7 @@ st.sidebar.title("Navigation")
 
 # Initialize session state for page selection
 if "selected_page" not in st.session_state:
-    st.session_state.selected_page = "Code Generator"
+    st.session_state.selected_page = "Daphnia Code Generator"
     st.session_state.selected_species = "daphnia"
 
 # Create a simple vertical menu
