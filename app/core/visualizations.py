@@ -12,15 +12,44 @@ from typing import Optional, Tuple
 # Data Cleaning Helpers
 # ===========================================================
 
-def _clean_and_split_values(series: pd.Series) -> pd.Series:
+def _normalize_life_stage(value: str) -> str:
+    """
+    Normalize life stage values to standard forms.
+    
+    Handles:
+    - "adolescence" → "adolescent"
+    - Lowercase conversion
+    - Whitespace stripping
+    
+    Args:
+        value: Raw life stage value
+        
+    Returns:
+        Normalized life stage value
+    """
+    if not value or not isinstance(value, str):
+        return ""
+    
+    normalized = value.strip().lower()
+    
+    # Map "adolescence" to "adolescent" for consistency
+    if normalized == "adolescence":
+        normalized = "adolescent"
+    
+    return normalized
+
+
+def _clean_and_split_values(series: pd.Series, normalize_life_stage: bool = False) -> pd.Series:
     """
     Clean a series by:
     1. Filtering out empty/null values
     2. Splitting comma-separated values
     3. Stripping whitespace
+    4. Optionally normalizing life stage values
     
     Args:
         series: Pandas Series with potentially comma-separated values
+        normalize_life_stage: If True, apply life stage normalization
         
     Returns:
         Cleaned and expanded Series
@@ -41,10 +70,14 @@ def _clean_and_split_values(series: pd.Series) -> pd.Series:
         else:
             expanded_values.append(val_str)
     
+    # Apply normalization if requested
+    if normalize_life_stage:
+        expanded_values = [_normalize_life_stage(v) for v in expanded_values]
+    
     return pd.Series(expanded_values)
 
 
-def _prepare_value_counts(series: pd.Series, col1_name: str = "value", col2_name: str = "count") -> pd.DataFrame:
+def _prepare_value_counts(series: pd.Series, col1_name: str = "value", col2_name: str = "count", normalize_life_stage: bool = False) -> pd.DataFrame:
     """
     Get value counts after cleaning and splitting.
     
@@ -52,11 +85,12 @@ def _prepare_value_counts(series: pd.Series, col1_name: str = "value", col2_name
         series: Series to count
         col1_name: Name for value column
         col2_name: Name for count column
+        normalize_life_stage: If True, apply life stage normalization
         
     Returns:
         DataFrame with value counts
     """
-    cleaned = _clean_and_split_values(series)
+    cleaned = _clean_and_split_values(series, normalize_life_stage=normalize_life_stage)
     if cleaned.empty:
         return pd.DataFrame()
     
@@ -140,7 +174,7 @@ def build_life_stage_chart(df: pd.DataFrame) -> Optional[Tuple[alt.Chart, pd.Dat
     Returns:
         Tuple of (chart, aggregated_data) or None if no valid data
     """
-    stage_data = _prepare_value_counts(df["life_stage"], "life_stage", "count")
+    stage_data = _prepare_value_counts(df["life_stage"], "life_stage", "count", normalize_life_stage=True)
     
     if stage_data.empty:
         return None
@@ -302,13 +336,17 @@ def build_mortality_by_stage_chart(df: pd.DataFrame) -> Optional[Tuple[alt.Chart
             # Split and create separate rows for each stage
             stages = [s.strip() for s in life_stage_str.split(',') if s.strip()]
             for stage in stages:
+                # Normalize life stage (adolescence → adolescent)
+                normalized_stage = _normalize_life_stage(stage)
                 expanded_rows.append({
-                    "life_stage": stage,
+                    "life_stage": normalized_stage,
                     "mortality": row["mortality"]
                 })
         else:
+            # Normalize life stage (adolescence → adolescent)
+            normalized_stage = _normalize_life_stage(life_stage_str)
             expanded_rows.append({
-                "life_stage": life_stage_str,
+                "life_stage": normalized_stage,
                 "mortality": row["mortality"]
             })
     

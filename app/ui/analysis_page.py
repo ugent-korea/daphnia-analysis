@@ -202,6 +202,8 @@ def _render_life_stage_cards(current_df: pd.DataFrame, broods_df: pd.DataFrame):
     
     This function sums the n_i (initial population) values from the broods table
     for each life stage category, providing the total initial population by life stage.
+    
+    IMPORTANT: We only count n_i for broods that exist in the current table.
     """
     if current_df.empty:
         st.info("⚠️ No alive broods data available yet")
@@ -215,21 +217,25 @@ def _render_life_stage_cards(current_df: pd.DataFrame, broods_df: pd.DataFrame):
     )
     
     # Normalize life_stage values
-    merged["life_stage_clean"] = merged["life_stage"].fillna("unknown").str.strip().str.lower()
+    merged["life_stage_clean"] = merged["life_stage"].fillna("").str.strip().str.lower()
     
     # Sum n_i (initial population) for each life stage
+    # Note: Handle both "adolescent" and "adolescence"
     adults_n_i = merged[merged["life_stage_clean"] == "adult"]["n_i"].fillna(0).sum()
-    adolescents_n_i = merged[merged["life_stage_clean"] == "adolescent"]["n_i"].fillna(0).sum()
+    adolescents_n_i = merged[
+        (merged["life_stage_clean"] == "adolescent") | 
+        (merged["life_stage_clean"] == "adolescence")
+    ]["n_i"].fillna(0).sum()
     neonates_n_i = merged[merged["life_stage_clean"] == "neonate"]["n_i"].fillna(0).sum()
     
-    # Calculate total initial population for alive broods
+    # Calculate total initial population (should equal sum of above if all broods have valid life_stage)
     total_initial_pop = merged["n_i"].fillna(0).sum()
     
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🟢 Adults Alive (N_i)", f"{int(adults_n_i):,}")
-    c2.metric("🟡 Adolescents Alive (N_i)", f"{int(adolescents_n_i):,}")
-    c3.metric("🔵 Neonates Alive (N_i)", f"{int(neonates_n_i):,}")
-    c4.metric("👥 Total Initial Population (Alive)", f"{int(total_initial_pop):,}")
+    c1.metric("🟢 Adults (N_i)", f"{int(adults_n_i):,}")
+    c2.metric("🟡 Adolescents (N_i)", f"{int(adolescents_n_i):,}")
+    c3.metric("🔵 Neonates (N_i)", f"{int(neonates_n_i):,}")
+    c4.metric("👥 Total (N_i)", f"{int(total_initial_pop):,}")
 
 
 def _render_all_charts(df: pd.DataFrame, broods_df: pd.DataFrame):
