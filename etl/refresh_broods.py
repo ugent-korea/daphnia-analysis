@@ -313,12 +313,12 @@ def main():
         _write_broods(conn, broods)
 
         meta = {
-            "last_refresh": _now_iso(),
-            "row_count": str(len(broods)),
-            "included_tabs": json.dumps(included, ensure_ascii=False),
-            "source_sheet_id": SHEET_ID,
-            "content_hash": content_hash,
-            "schema": "broods",
+            "broods_last_refresh": _now_iso(),
+            "broods_row_count": str(len(broods)),
+            "broods_included_tabs": json.dumps(included, ensure_ascii=False),
+            "broods_source_sheet_id": SHEET_ID,
+            "broods_content_hash": content_hash,
+            "broods_schema": "broods",
         }
         for k, v in meta.items():
             conn.execute(text("""

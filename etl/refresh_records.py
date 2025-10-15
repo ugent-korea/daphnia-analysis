@@ -358,12 +358,12 @@ def main():
         _write_records(conn, records)
 
         meta = {
-            "last_refresh": _now_iso(),
-            "row_count": str(len(records)),
-            "included_tabs": json.dumps(included, ensure_ascii=False),
-            "source_sheet_id": SHEET_ID,
-            "content_hash": _hash_df(records),
-            "schema": "records",
+            "records_last_refresh": _now_iso(),
+            "records_row_count": str(len(records)),
+            "records_included_tabs": json.dumps(included, ensure_ascii=False),
+            "records_source_sheet_id": SHEET_ID,
+            "records_content_hash": _hash_df(records),
+            "records_schema": "records",
         }
         for k, v in meta.items():
             conn.execute(text("""

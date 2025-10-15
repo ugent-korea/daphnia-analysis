@@ -31,8 +31,15 @@ def set_faded_bg_from_svg(svg_path: str, overlay_alpha: float = 0.86,
 def today_suffix(tz="Asia/Seoul") -> str:
     return datetime.datetime.now(ZoneInfo(tz)).strftime("_%m%d")
 
-def last_refresh_kst(meta) -> str:
-    ts = (meta or {}).get("last_refresh")
+def last_refresh_kst(meta, key="last_refresh") -> str:
+    """
+    Get last refresh timestamp in KST.
+    
+    Args:
+        meta: Dictionary containing metadata
+        key: Meta key to look up (default: "last_refresh", can be "broods_last_refresh", etc.)
+    """
+    ts = (meta or {}).get(key)
     if not ts:
         return "unknown"
     s = ts.replace("Z", "+00:00")

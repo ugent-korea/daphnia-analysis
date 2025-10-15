@@ -7,8 +7,8 @@ def render():
 
     meta = database.get_data()["meta"]
     st.caption(
-        f"Last refresh (KST): {utils.last_refresh_kst(meta)} • "
-        f"Rows: {meta.get('row_count', '?')} • Schema: {meta.get('schema', 'unknown').capitalize()}"
+        f"Last refresh (KST): {utils.last_refresh_kst(meta, 'broods_last_refresh')} • "
+        f"Rows: {meta.get('broods_row_count', '?')} • Schema: {meta.get('broods_schema', 'unknown').capitalize()}"
     )
 
     mother_input = st.text_input(
