@@ -201,10 +201,40 @@ def calculate_metrics(df: pd.DataFrame, current_df: pd.DataFrame = None, broods_
     # Count active broods from current table
     active_broods = len(current_df) if current_df is not None and not current_df.empty else 0
     
+    # Calculate average life expectancy for dead broods
+    avg_life_expectancy = None
+    if broods_df is not None and not broods_df.empty:
+        # Filter for dead broods (those with death_date)
+        dead_broods = broods_df[
+            (broods_df["death_date"].notna()) & 
+            (broods_df["death_date"] != "") &
+            (broods_df["death_date"].str.strip() != "")
+        ].copy()
+        
+        if not dead_broods.empty:
+            # Parse birth and death dates
+            dead_broods["birth_date_parsed"] = dead_broods["birth_date"].apply(parse_date_safe)
+            dead_broods["death_date_parsed"] = dead_broods["death_date"].apply(parse_date_safe)
+            
+            # Calculate life expectancy in days
+            dead_broods["life_expectancy_days"] = (
+                dead_broods["death_date_parsed"] - dead_broods["birth_date_parsed"]
+            ).dt.days
+            
+            # Filter out invalid calculations
+            valid_life_exp = dead_broods[
+                (dead_broods["life_expectancy_days"].notna()) &
+                (dead_broods["life_expectancy_days"] >= 0)
+            ]["life_expectancy_days"]
+            
+            if not valid_life_exp.empty:
+                avg_life_expectancy = valid_life_exp.mean()
+    
     return {
         "total_records": total_records,
         "unique_mothers": unique_mothers,
         "active_broods": active_broods,
         "records_with_dates": df["date"].notna().sum(),
         "records_without_dates": df["date"].isna().sum(),
+        "avg_life_expectancy": avg_life_expectancy,
     }

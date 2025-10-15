@@ -148,17 +148,23 @@ def _get_assigned_person(broods_df: pd.DataFrame, set_name: str) -> str:
 
 def _render_dashboard(df: pd.DataFrame, current_df: pd.DataFrame, broods_df: pd.DataFrame, set_name: str):
     """Render complete dashboard for a dataset."""
+    # Filter broods_df by set if not cumulative
+    if set_name != "Cumulative":
+        broods_df_filtered = broods_df[broods_df["set_label"] == set_name]
+    else:
+        broods_df_filtered = broods_df
+    
     # Calculate and display metrics
-    metrics = utils.calculate_metrics(df, current_df, broods_df)
+    metrics = utils.calculate_metrics(df, current_df, broods_df_filtered)
     _render_kpis(metrics)
     
-    # Render life stage breakdown (second row of cards)
-    _render_life_stage_cards(current_df)
+    # Render life stage breakdown (second row of cards) - pass broods_df_filtered
+    _render_life_stage_cards(current_df, broods_df_filtered)
     
     st.divider()
     
-    # Render all charts
-    _render_all_charts(df, broods_df)
+    # Render all charts - pass filtered broods
+    _render_all_charts(df, broods_df_filtered)
     
     st.divider()
     
@@ -171,29 +177,54 @@ def _render_dashboard(df: pd.DataFrame, current_df: pd.DataFrame, broods_df: pd.
 
 def _render_kpis(metrics: dict):
     """Render KPI metrics in columns."""
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Records", f"{metrics['total_records']:,}")
-    c2.metric("Unique Mothers / Active Broods", f"{metrics['unique_mothers']:,} / {metrics['active_broods']:,}")
-    c3.metric("Records with Dates", f"{metrics['records_with_dates']:,}")
+    c2.metric("Unique Mothers", f"{metrics['unique_mothers']:,}")
+    c3.metric("Active Broods", f"{metrics['active_broods']:,}")
+    
+    # Average life expectancy
+    avg_life_exp = metrics.get('avg_life_expectancy')
+    if avg_life_exp is not None and avg_life_exp > 0:
+        c4.metric("Avg Brood Life Expectancy", f"{avg_life_exp:.1f} days")
+    else:
+        c4.metric("Avg Brood Life Expectancy", "N/A")
 
 
-def _render_life_stage_cards(current_df: pd.DataFrame):
-    """Render life stage breakdown cards for alive broods."""
+def _render_life_stage_cards(current_df: pd.DataFrame, broods_df: pd.DataFrame):
+    """
+    Render life stage breakdown cards for alive broods.
+    
+    Data source: The `current` table contains the most recent record for each alive brood.
+    This table is materialized by refresh_current.py ETL script which:
+    1. Queries broods table for alive mothers (no death_date, status != dead)
+    2. Joins with records table to get the latest record (by date) for each alive mother
+    3. Stores in the `current` table with columns including life_stage
+    
+    Life stage values come from the most recent daily observation for each alive brood.
+    """
     if current_df.empty:
         st.info("⚠️ No alive broods data available yet")
         return
     
     # Count life stages from current table
+    # Each row in current_df represents one alive brood with its latest life_stage
     life_stage_counts = current_df["life_stage"].fillna("unknown").str.strip().str.lower().value_counts()
     
     adults = life_stage_counts.get("adult", 0)
     adolescents = life_stage_counts.get("adolescent", 0)
     neonates = life_stage_counts.get("neonate", 0)
     
-    c1, c2, c3 = st.columns(3)
+    # Calculate total initial population for alive broods
+    # Extract mother_ids from current table and sum their n_i values from broods table
+    alive_mother_ids = current_df["mother_id"].unique()
+    alive_broods_subset = broods_df[broods_df["mother_id"].isin(alive_mother_ids)]
+    total_initial_pop = alive_broods_subset["n_i"].fillna(0).sum()
+    
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("🟢 Adults Alive", f"{adults:,}")
     c2.metric("🟡 Adolescents Alive", f"{adolescents:,}")
     c3.metric("🔵 Neonates Alive", f"{neonates:,}")
+    c4.metric("👥 Total Initial Population", f"{int(total_initial_pop):,}")
 
 
 def _render_all_charts(df: pd.DataFrame, broods_df: pd.DataFrame):
