@@ -20,7 +20,7 @@ utils.set_faded_bg_from_svg(
 )
 
 DAPHNIA_PAGES = {
-    "Code Generator": coder_page,
+    "Daphnia Code Generator": coder_page,
     "Daphnia Analysis": analysis_page,
     "Test Connectivity": test_connectivity,
 }

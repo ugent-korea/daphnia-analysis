@@ -20,7 +20,7 @@ def render():
         st.stop()
 
     # Debug info (collapsed by default)
-    _render_debug_panel(broods_df, records_df)
+    # _render_debug_panel(broods_df, records_df)
 
     # Prepare data for analysis
     df = utils.prepare_analysis_data(records_df, broods_df)

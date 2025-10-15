@@ -32,3 +32,8 @@ jobs:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python etl/refresh_records.py
+
+      - name: Run ETL (refresh current - alive broods)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python etl/refresh_current.py

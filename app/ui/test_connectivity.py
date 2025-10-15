@@ -10,7 +10,7 @@ def render():
 
     # Load data
     try:
-        broods_df, records_df = _load_and_validate_data()
+        broods_df, records_df, current_df = _load_and_validate_data()
     except Exception as e:
         st.error(f"❌ Failed to load data: {e}")
         return
@@ -29,7 +29,7 @@ def render():
         return
 
     # Display overview
-    _render_overview(records_df, broods_df, df)
+    _render_overview(records_df, broods_df, current_df, df)
 
     # Get all unique sets from broods table (safer to use broods_df directly)
     all_sets = _get_all_sets_from_broods(broods_df)
@@ -44,7 +44,7 @@ def render():
 
 
 def _load_and_validate_data():
-    """Load broods and records data from database."""
+    """Load broods, records, and current data from database."""
     # Load broods
     data = database.get_data()
     by_full = data.get("by_full", {})
@@ -61,17 +61,40 @@ def _load_and_validate_data():
     # Load records
     records_df = database.get_records()
     
-    return broods_df, records_df
+    # Load current (alive broods)
+    try:
+        current_df = database.get_current()
+    except Exception as e:
+        st.warning(f"⚠️ Current table not yet available: {e}")
+        current_df = pd.DataFrame()
+    
+    return broods_df, records_df, current_df
 
 
-def _render_overview(records_df: pd.DataFrame, broods_df: pd.DataFrame, merged_df: pd.DataFrame):
+def _render_overview(records_df: pd.DataFrame, broods_df: pd.DataFrame, current_df: pd.DataFrame, merged_df: pd.DataFrame):
     """Display overview statistics."""
-    st.info(f"✅ Loaded {len(records_df):,} records | {len(broods_df):,} broods")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.info(f"📊 **Records:** {len(records_df):,}")
+    
+    with col2:
+        st.info(f"🧬 **Broods:** {len(broods_df):,}")
+    
+    with col3:
+        if not current_df.empty:
+            st.success(f"🟢 **Alive Now:** {len(current_df):,}")
+        else:
+            st.warning("⚠️ **Current table not populated yet**")
     
     with st.expander("🔍 Data Structure Info", expanded=False):
         st.write(f"**Merged dataframe columns:** {', '.join(merged_df.columns)}")
         st.write(f"**Broods columns:** {', '.join(broods_df.columns)}")
         st.write(f"**Records columns:** {', '.join(records_df.columns)}")
+        
+        if not current_df.empty:
+            st.write(f"**Current columns:** {', '.join(current_df.columns)}")
+            st.write(f"**Current table last updated:** Check meta table for timestamp")
         
         # Show merge quality
         if "_merge" in merged_df.columns:

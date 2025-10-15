@@ -100,9 +100,21 @@ def load_records(day_key: str):
         records_df = pd.read_sql(text("SELECT * FROM records"), conn)
     return records_df
 
+@st.cache_data(show_spinner=False)
+def load_current(day_key: str):
+    """Load current alive broods with their latest records once per KST day."""
+    eng = get_engine()
+    with eng.connect() as conn:
+        current_df = pd.read_sql(text("SELECT * FROM current"), conn)
+    return current_df
+
 def get_data():
     return load_all(_kst_day_key())
 
 def get_records():
     """Get cached records dataframe."""
     return load_records(_kst_day_key())
+
+def get_current():
+    """Get cached current alive broods dataframe."""
+    return load_current(_kst_day_key())
