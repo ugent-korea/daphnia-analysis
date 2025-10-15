@@ -200,31 +200,36 @@ def _render_life_stage_cards(current_df: pd.DataFrame, broods_df: pd.DataFrame):
     2. Joins with records table to get the latest record (by date) for each alive mother
     3. Stores in the `current` table with columns including life_stage
     
-    Life stage values come from the most recent daily observation for each alive brood.
+    This function sums the n_i (initial population) values from the broods table
+    for each life stage category, providing the total initial population by life stage.
     """
     if current_df.empty:
         st.info("⚠️ No alive broods data available yet")
         return
     
-    # Count life stages from current table
-    # Each row in current_df represents one alive brood with its latest life_stage
-    life_stage_counts = current_df["life_stage"].fillna("unknown").str.strip().str.lower().value_counts()
+    # Merge current_df with broods_df to get n_i values alongside life_stage
+    merged = current_df.merge(
+        broods_df[["mother_id", "n_i"]], 
+        on="mother_id", 
+        how="left"
+    )
     
-    adults = life_stage_counts.get("adult", 0)
-    adolescents = life_stage_counts.get("adolescent", 0)
-    neonates = life_stage_counts.get("neonate", 0)
+    # Normalize life_stage values
+    merged["life_stage_clean"] = merged["life_stage"].fillna("unknown").str.strip().str.lower()
+    
+    # Sum n_i (initial population) for each life stage
+    adults_n_i = merged[merged["life_stage_clean"] == "adult"]["n_i"].fillna(0).sum()
+    adolescents_n_i = merged[merged["life_stage_clean"] == "adolescent"]["n_i"].fillna(0).sum()
+    neonates_n_i = merged[merged["life_stage_clean"] == "neonate"]["n_i"].fillna(0).sum()
     
     # Calculate total initial population for alive broods
-    # Extract mother_ids from current table and sum their n_i values from broods table
-    alive_mother_ids = current_df["mother_id"].unique()
-    alive_broods_subset = broods_df[broods_df["mother_id"].isin(alive_mother_ids)]
-    total_initial_pop = alive_broods_subset["n_i"].fillna(0).sum()
+    total_initial_pop = merged["n_i"].fillna(0).sum()
     
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🟢 Adults Alive", f"{adults:,}")
-    c2.metric("🟡 Adolescents Alive", f"{adolescents:,}")
-    c3.metric("🔵 Neonates Alive", f"{neonates:,}")
-    c4.metric("👥 Total Initial Population", f"{int(total_initial_pop):,}")
+    c1.metric("🟢 Adults Alive (N_i)", f"{int(adults_n_i):,}")
+    c2.metric("🟡 Adolescents Alive (N_i)", f"{int(adolescents_n_i):,}")
+    c3.metric("🔵 Neonates Alive (N_i)", f"{int(neonates_n_i):,}")
+    c4.metric("👥 Total Initial Population (Alive)", f"{int(total_initial_pop):,}")
 
 
 def _render_all_charts(df: pd.DataFrame, broods_df: pd.DataFrame):

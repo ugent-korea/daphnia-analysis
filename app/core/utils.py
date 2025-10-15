@@ -196,7 +196,9 @@ def prepare_analysis_data(records: pd.DataFrame, broods: pd.DataFrame) -> pd.Dat
 def calculate_metrics(df: pd.DataFrame, current_df: pd.DataFrame = None, broods_df: pd.DataFrame = None) -> dict:
     """Calculate summary metrics for a dataset."""
     total_records = len(df)
-    unique_mothers = df["mother_id"].nunique()
+    
+    # Count unique mothers from BROODS table (not records), so it matches Active + Dead counts
+    unique_mothers = len(broods_df) if broods_df is not None and not broods_df.empty else 0
     
     # Count active broods from current table
     active_broods = len(current_df) if current_df is not None and not current_df.empty else 0
