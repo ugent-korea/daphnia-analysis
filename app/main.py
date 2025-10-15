@@ -22,7 +22,7 @@ utils.set_faded_bg_from_svg(
 DAPHNIA_PAGES = {
     "Daphnia Code Generator": coder_page,
     "Daphnia Analysis": analysis_page,
-    "Test Connectivity": test_connectivity,
+    # "Test Connectivity": test_connectivity,
 }
 
 # MOINA_PAGES = {
