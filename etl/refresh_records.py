@@ -7,8 +7,8 @@ from sqlalchemy import create_engine, text
 
 # ==== ENV ====
 SA_JSON   = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
-SHEET_ID  = os.environ["GOOGLE_SHEET_ID"]
-DB_URL    = os.environ["DATABASE_URL"]
+SHEET_ID  = os.environ["DAPHNIA_GOOGLE_SHEET_ID"]
+DB_URL    = os.environ["DAPHNIA_DATABASE_URL"]
 
 # ==== Tab filter & title parsing ====
 TAB_INCLUDE_PATTERN = re.compile(r"^set\s+[a-z]\b", re.IGNORECASE)

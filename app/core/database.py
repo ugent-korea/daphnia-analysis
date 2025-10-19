@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 import streamlit as st
 import pandas as pd
 
-DB_URL = os.getenv("DATABASE_URL") or st.secrets.get("DATABASE_URL")
+DB_URL = os.getenv("DAPHNIA_DATABASE_URL") or st.secrets.get("DAPHNIA_DATABASE_URL")
 
 def _ensure_db_or_stop():
     if not DB_URL:

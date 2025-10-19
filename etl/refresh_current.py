@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine, text
 
 # ==== ENV ====
-DB_URL = os.environ["DATABASE_URL"]
+DB_URL = os.environ["DAPHNIA_DATABASE_URL"]
 
 # ==== Logging ====
 def _log(msg): print(f"[ETL-CURRENT] {msg}", flush=True)

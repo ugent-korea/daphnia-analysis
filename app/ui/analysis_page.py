@@ -180,7 +180,7 @@ def _render_kpis(metrics: dict):
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Records", f"{metrics['total_records']:,}")
     c2.metric("Unique Mothers", f"{metrics['unique_mothers']:,}")
-    c3.metric("Active Broods", f"{metrics['active_broods']:,}")
+    c3.metric("Alive Broods", f"{metrics['active_broods']:,}")
     
     # Average life expectancy
     avg_life_exp = metrics.get('avg_life_expectancy')
@@ -231,11 +231,12 @@ def _render_life_stage_cards(current_df: pd.DataFrame, broods_df: pd.DataFrame):
     # Calculate total initial population (should equal sum of above if all broods have valid life_stage)
     total_initial_pop = merged["n_i"].fillna(0).sum()
     
+    st.markdown("#### Current number of daphnias by life stage")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🟢 Adults (N_i)", f"{int(adults_n_i):,}")
-    c2.metric("🟡 Adolescents (N_i)", f"{int(adolescents_n_i):,}")
-    c3.metric("🔵 Neonates (N_i)", f"{int(neonates_n_i):,}")
-    c4.metric("👥 Total (N_i)", f"{int(total_initial_pop):,}")
+    c1.metric("🟢 Adults", f"{int(adults_n_i):,}")
+    c2.metric("🟡 Adolescents", f"{int(adolescents_n_i):,}")
+    c3.metric("🔵 Neonates", f"{int(neonates_n_i):,}")
+    c4.metric("👥 Total", f"{int(total_initial_pop):,}")
 
 
 def _render_all_charts(df: pd.DataFrame, broods_df: pd.DataFrame):
@@ -334,7 +335,13 @@ def _render_life_expectancy_distribution(df: pd.DataFrame, broods_df: pd.DataFra
         st.warning("⚠️ Could not calculate life expectancy - check birth/death date formats")
         return
     
-    # Create histogram
+    # Show statistics FIRST (before the chart)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Dead Broods", f"{len(dead_broods_valid):,}")
+    col2.metric("Avg Life Expectancy", f"{dead_broods_valid['life_expectancy_days'].mean():.1f} days")
+    col3.metric("Max Life Expectancy", f"{dead_broods_valid['life_expectancy_days'].max():.0f} days")
+    
+    # Create histogram AFTER the cards
     chart = alt.Chart(dead_broods_valid).mark_bar(
         opacity=0.7,
         color="#4CAF50"
@@ -357,9 +364,3 @@ def _render_life_expectancy_distribution(df: pd.DataFrame, broods_df: pd.DataFra
     )
     
     st.altair_chart(chart, use_container_width=True)
-    
-    # Show statistics
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Dead Broods", f"{len(dead_broods_valid):,}")
-    col2.metric("Avg Life Expectancy", f"{dead_broods_valid['life_expectancy_days'].mean():.1f} days")
-    col3.metric("Max Life Expectancy", f"{dead_broods_valid['life_expectancy_days'].max():.0f} days")
