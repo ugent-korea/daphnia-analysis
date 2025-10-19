@@ -29,7 +29,34 @@ DAPHNIA_PAGES = {
 #     "Moina Analysis": test_connectivity,  # placeholder
 # }
 
-st.sidebar.title("Navigation")
+# st.sidebar.title("Navigation")
+# --- Sidebar header: flush logo (covers top gap) ---
+with st.sidebar:
+    # Nuke all default top padding in the sidebar and pull the image up a bit
+    st.markdown(
+        """
+        <style>
+            /* Remove default top padding in the sidebar container */
+            section[data-testid="stSidebar"] .block-container { padding-top: 0 !important; }
+            section[data-testid="stSidebar"] > div:first-child { padding-top: 0 !important; }
+
+            /* Pull the first image upward to cover the remaining gap under the chevrons */
+            section[data-testid="stSidebar"] [data-testid="stImage"] img {
+                margin-top: -28px !important;           /* tweak if you want it tighter/looser */
+                display: block;
+            }
+
+            /* Optional: remove rounded white “card” feel if any wrapper adds it */
+            section[data-testid="stSidebar"] [data-testid="stImage"] {
+                margin-top: 0 !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Full-width logo, no "Navigation" heading anymore
+    st.image(LOGO_PATH, use_container_width=True)
 
 # Initialize session state for page selection
 if "selected_page" not in st.session_state:
