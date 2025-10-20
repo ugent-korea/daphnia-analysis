@@ -42,6 +42,10 @@ def render():
             st.error("MotherID not found.")
             return
 
+        # Check if mother is dead - show warning at the top
+        if not coder.is_mother_alive(parent):
+            st.error("⚠️ WARNING: This mother is DEAD. Please verify the mother code.")
+
         st.caption(
             f"Matched parent: `{resolved_full_id}` "
             f"(core normalized: `{coder.canonical_core(resolved_full_id)}`)"
@@ -63,6 +67,9 @@ def render():
             st.error("Discard? Yes")
         else:
             st.write("**Discard?** No")
+            # Add experimental note for 3rd broods
+            if "3rd subbrood" in basis:
+                st.info("💡 Note: Third broods are optimal for experimental use.")
 
         st.caption(basis)
 
