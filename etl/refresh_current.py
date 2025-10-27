@@ -58,19 +58,55 @@ def main():
         _ensure_schema(conn)
         
         # Step 1: Get all alive mother_ids from broods
-        # Alive = death_date is NULL/empty AND status does NOT indicate death
+        # Alive = status matches 'alive' pattern (case-insensitive, handles whitespace)
+        # Dead = status matches 'dead' pattern (case-insensitive)
+        # death_date can be NULL or 'Unknown' without affecting status
         alive_query = text("""
             SELECT mother_id 
             FROM broods 
-            WHERE (death_date IS NULL OR death_date = '' OR TRIM(death_date) = '')
-              AND (status IS NULL OR status = '' 
-                   OR LOWER(TRIM(status)) NOT IN ('dead', 'deceased', 'died'))
+            WHERE LOWER(TRIM(COALESCE(status, ''))) ~ '^alive$'
         """)
         
         alive_broods = conn.execute(alive_query).fetchall()
         alive_mother_ids = [row[0] for row in alive_broods]
         
         _log(f"Found {len(alive_mother_ids)} alive broods")
+        
+        # Step 1b: Check for invalid status entries
+        # Use regex to handle common typos and variations
+        invalid_status_query = text("""
+            SELECT mother_id, status, set_label, assigned_person
+            FROM broods 
+            WHERE LOWER(TRIM(COALESCE(status, ''))) != ''
+              AND LOWER(TRIM(COALESCE(status, ''))) !~ '^(alive|dead|unknown)$'
+            ORDER BY set_label, mother_id
+        """)
+        
+        invalid_entries = conn.execute(invalid_status_query).mappings().all()
+        
+        if invalid_entries:
+            _log(f"WARNING: Found {len(invalid_entries)} broods with invalid status entries:")
+            for entry in invalid_entries:
+                _log(f"  - {entry['mother_id']} (Set: {entry['set_label']}, Person: {entry['assigned_person']}): status='{entry['status']}'")
+        
+        # Store invalid status info in meta for UI display
+        if invalid_entries:
+            invalid_status_json = str([
+                {
+                    "mother_id": e["mother_id"],
+                    "status": e["status"],
+                    "set_label": e["set_label"],
+                    "assigned_person": e["assigned_person"]
+                }
+                for e in invalid_entries
+            ])
+            conn.execute(text("""
+                INSERT INTO meta(k, v) VALUES (:k, :v)
+                ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v
+            """), {"k": "invalid_status_entries", "v": invalid_status_json})
+        else:
+            # Clear the meta entry if no invalid entries
+            conn.execute(text("DELETE FROM meta WHERE k = 'invalid_status_entries'"))
         
         if not alive_mother_ids:
             _log("No alive broods found. Truncating current table.")

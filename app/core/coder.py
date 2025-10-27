@@ -46,10 +46,14 @@ def get_children_ids(parent_full_id: str):
     return get_data()["children_by_origin"].get(parent_full_id, [])
 
 def is_mother_alive(parent_row: dict) -> bool:
-    """Check if a mother is alive based on status and death_date."""
+    """Check if a mother is alive based ONLY on status field.
+    
+    Alive = status matches 'alive' pattern (case-insensitive, whitespace-trimmed)
+    Dead = status matches 'dead' pattern (case-insensitive, whitespace-trimmed)
+    death_date field is ignored (can be NULL or 'Unknown')
+    """
     status = str(parent_row.get("status", "")).strip().lower()
-    death_date = str(parent_row.get("death_date", "")).strip()
-    return (status == "" or status not in ["dead", "deceased", "died"]) and death_date == ""
+    return re.match(r'^alive$', status) is not None
 
 def _parse_core(core: str):
     core = canonical_core(core)
@@ -86,10 +90,9 @@ def _alive_count_in_set(set_word: str) -> int:
     cnt = 0
     for row in data["by_full"].values():
         if (row.get("set_label") or "").upper() == set_word.upper():
-            # Alive = both status is empty/not dead AND death_date is empty
+            # Alive = status matches 'alive' pattern (case-insensitive)
             status = str(row.get("status", "")).strip().lower()
-            death_date = str(row.get("death_date", "")).strip()
-            is_alive = (status == "" or status not in ["dead", "deceased", "died"]) and death_date == ""
+            is_alive = re.match(r'^alive$', status) is not None
             if is_alive:
                 cnt += 1
     return cnt

@@ -14,6 +14,9 @@ def render():
     except Exception as e:
         st.error(f"❌ Failed to load data: {e}")
         return
+    
+    # Check for invalid status entries and show warning
+    _render_invalid_status_warning()
 
     if records_df.empty:
         st.warning("⚠️ No records found in the database.")
@@ -60,6 +63,49 @@ def _load_and_validate_data():
         current_df = pd.DataFrame()
     
     return broods_df, records_df, current_df
+
+
+def _render_invalid_status_warning():
+    """Display warning for invalid status entries."""
+    try:
+        data = database.get_data()
+        meta = data.get("meta", {})
+        invalid_status_raw = meta.get('invalid_status_entries')
+        
+        if invalid_status_raw:
+            try:
+                import ast
+                invalid_entries = ast.literal_eval(invalid_status_raw)
+                if invalid_entries:
+                    st.error(f"⚠️ **DATA QUALITY ALERT: {len(invalid_entries)} brood(s) have invalid status entries!**")
+                    
+                    with st.expander("📋 View Invalid Status Entries", expanded=False):
+                        st.warning(
+                            "**Status must be ONLY:** `Alive` or `Dead` (case-insensitive)\n\n"
+                            "**Invalid entries found:**"
+                        )
+                        
+                        # Group by assigned person
+                        from collections import defaultdict
+                        by_person = defaultdict(list)
+                        for entry in invalid_entries:
+                            person = entry.get('assigned_person', 'Unknown')
+                            by_person[person].append(entry)
+                        
+                        for person, entries in sorted(by_person.items()):
+                            st.markdown(f"**👤 {person}** ({len(entries)} entries)")
+                            for entry in entries:
+                                st.markdown(
+                                    f"- Mother ID: `{entry['mother_id']}` | "
+                                    f"Set: {entry['set_label']} | "
+                                    f"Invalid Status: `{entry['status']}`"
+                                )
+                        
+                        st.info("💡 **Action Required:** Update Google Sheets to use only 'Alive' or 'Dead', then run ETL refresh.")
+            except Exception as e:
+                st.error(f"Error parsing invalid status entries: {e}")
+    except Exception:
+        pass  # Silently skip if meta not available
 
 
 def _render_debug_panel(broods_df: pd.DataFrame, records_df: pd.DataFrame):
@@ -305,18 +351,16 @@ def _render_life_expectancy_distribution(df: pd.DataFrame, broods_df: pd.DataFra
     
     st.subheader("📊 Life Expectancy Distribution (Dead Broods)")
     
-    # Filter for dead broods (those with death_date)
+    # Filter for dead broods using regex pattern (case-insensitive, whitespace-trimmed)
     dead_broods = broods_df[
-        (broods_df["death_date"].notna()) & 
-        (broods_df["death_date"] != "") &
-        (broods_df["death_date"].str.strip() != "")
+        broods_df["status"].astype(str).str.strip().str.lower().str.match(r'^dead$', na=False)
     ].copy()
     
     if dead_broods.empty:
         st.info("📊 No dead broods found yet - life expectancy data will appear here once broods complete their lifecycle")
         return
     
-    # Parse birth and death dates
+    # Parse birth and death dates (death_date might be 'Unknown' or NULL)
     dead_broods["birth_date_parsed"] = dead_broods["birth_date"].apply(utils.parse_date_safe)
     dead_broods["death_date_parsed"] = dead_broods["death_date"].apply(utils.parse_date_safe)
     
@@ -325,14 +369,14 @@ def _render_life_expectancy_distribution(df: pd.DataFrame, broods_df: pd.DataFra
         dead_broods["death_date_parsed"] - dead_broods["birth_date_parsed"]
     ).dt.days
     
-    # Filter out invalid calculations
+    # Filter out invalid calculations (including Unknown death dates)
     dead_broods_valid = dead_broods[
         (dead_broods["life_expectancy_days"].notna()) &
         (dead_broods["life_expectancy_days"] >= 0)
     ].copy()
     
     if dead_broods_valid.empty:
-        st.warning("⚠️ Could not calculate life expectancy - check birth/death date formats")
+        st.warning(f"⚠️ Found {len(dead_broods)} dead broods, but could not calculate life expectancy - check birth/death date formats (death_date cannot be 'Unknown' for calculation)")
         return
     
     # Show statistics FIRST (before the chart)

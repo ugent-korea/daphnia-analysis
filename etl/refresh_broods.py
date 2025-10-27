@@ -157,7 +157,10 @@ def _clean(df, header_map):
         out[c] = out[c].map(_to_int_or_none)
 
     for c in ("birth_date", "death_date"):
-        out[c] = out[c].astype(str).map(lambda s: "" if s.strip().lower() in ("null","nan") else s.strip())
+        # Normalize date fields: keep valid dates, convert null/unknown/empty to empty string (case-insensitive)
+        out[c] = out[c].astype(str).map(
+            lambda s: "" if re.match(r'^(null|nan|unknown|na|n/a|none)$', s.strip(), re.IGNORECASE) or s.strip() == "" else s.strip()
+        )
 
     out["mother_id"] = out["mother_id"].astype(str).map(lambda s: s.strip())
     out = out[out["mother_id"] != ""]

@@ -93,12 +93,17 @@ def normalize_mother_id(mid: str) -> str:
 
 
 def parse_date_safe(date_val):
-    """Parse date, return NaT for NULL/empty values"""
+    """Parse date, return NaT for NULL/empty/unknown values (case-insensitive)"""
     if pd.isna(date_val) or date_val == "" or date_val is None:
         return pd.NaT
     
     date_str = str(date_val).strip()
-    if date_str.upper() in ["NULL", "NA", "N/A", "NONE", ""]:
+    
+    # Check for invalid/unknown values with regex (case-insensitive)
+    if re.match(r'^(null|na|n/a|none|unknown)$', date_str, re.IGNORECASE):
+        return pd.NaT
+    
+    if date_str == "":
         return pd.NaT
     
     # Try pandas auto-detection (handles YYYY-MM-DD, DD-MM-YYYY, etc.)
@@ -204,17 +209,16 @@ def calculate_metrics(df: pd.DataFrame, current_df: pd.DataFrame = None, broods_
     active_broods = len(current_df) if current_df is not None and not current_df.empty else 0
     
     # Calculate average life expectancy for dead broods
+    # Dead = status matches 'dead' pattern (case-insensitive, whitespace-trimmed)
     avg_life_expectancy = None
     if broods_df is not None and not broods_df.empty:
-        # Filter for dead broods (those with death_date)
+        # Filter for dead broods using regex pattern
         dead_broods = broods_df[
-            (broods_df["death_date"].notna()) & 
-            (broods_df["death_date"] != "") &
-            (broods_df["death_date"].str.strip() != "")
+            broods_df["status"].astype(str).str.strip().str.lower().str.match(r'^dead$', na=False)
         ].copy()
         
         if not dead_broods.empty:
-            # Parse birth and death dates
+            # Parse birth and death dates (death_date might be NULL or 'Unknown')
             dead_broods["birth_date_parsed"] = dead_broods["birth_date"].apply(parse_date_safe)
             dead_broods["death_date_parsed"] = dead_broods["death_date"].apply(parse_date_safe)
             
@@ -223,7 +227,7 @@ def calculate_metrics(df: pd.DataFrame, current_df: pd.DataFrame = None, broods_
                 dead_broods["death_date_parsed"] - dead_broods["birth_date_parsed"]
             ).dt.days
             
-            # Filter out invalid calculations
+            # Filter out invalid calculations (including Unknown death dates)
             valid_life_exp = dead_broods[
                 (dead_broods["life_expectancy_days"].notna()) &
                 (dead_broods["life_expectancy_days"] >= 0)
