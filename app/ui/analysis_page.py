@@ -153,9 +153,36 @@ def _get_all_sets_from_broods(broods_df: pd.DataFrame) -> list:
     return all_sets
 
 
+def _is_set_complete(broods_df: pd.DataFrame, current_df: pd.DataFrame, set_name: str) -> bool:
+    """Check if a set is complete (has no alive broods).
+    
+    A set is complete when it has no entries in the current table (no alive broods).
+    Returns True if the set has no alive broods.
+    """
+    if set_name == "Cumulative":
+        return False  # Cumulative view is never "complete"
+    
+    # Check if there are any alive broods for this set in current table
+    if current_df.empty:
+        return True  # No current data means complete
+    
+    set_current = current_df[current_df["set_label"] == set_name]
+    
+    return len(set_current) == 0  # Complete if no alive broods in current table
+
+
 def _render_analysis_tabs(df: pd.DataFrame, broods_df: pd.DataFrame, current_df: pd.DataFrame, all_sets: list):
     """Render tabs for cumulative and individual set analysis."""
-    tabs = st.tabs(["🌍 Cumulative"] + [f"Set {s}" for s in all_sets])
+    # Create tab labels with completion status
+    tab_labels = ["🌍 Cumulative"]
+    for s in all_sets:
+        is_complete = _is_set_complete(broods_df, current_df, s)
+        if is_complete:
+            tab_labels.append(f"Set {s} ✓")  # Checkmark for complete sets
+        else:
+            tab_labels.append(f"Set {s}")
+    
+    tabs = st.tabs(tab_labels)
 
     for i, tab in enumerate(tabs):
         with tab:
@@ -169,11 +196,18 @@ def _render_analysis_tabs(df: pd.DataFrame, broods_df: pd.DataFrame, current_df:
             else:
                 # Individual set tab
                 set_name = all_sets[i - 1]
+                is_complete = _is_set_complete(broods_df, current_df, set_name)
+                
                 df_sub = df[df["set_label"] == set_name]
                 current_sub = current_df[current_df["set_label"] == set_name] if not current_df.empty else pd.DataFrame()
                 assigned_person = _get_assigned_person(broods_df, set_name)
                 
                 st.markdown(f"### 🧬 Set {set_name} Overview")
+                
+                # Show completion status
+                if is_complete:
+                    st.success(f"✅ **Set {set_name} is COMPLETE** - All broods have finished their lifecycle")
+                
                 st.caption(f"👩 Assigned to: **{assigned_person}**")
                 
                 if df_sub.empty:
@@ -376,7 +410,7 @@ def _render_life_expectancy_distribution(df: pd.DataFrame, broods_df: pd.DataFra
     ].copy()
     
     if dead_broods_valid.empty:
-        st.warning(f"⚠️ Found {len(dead_broods)} dead broods, but could not calculate life expectancy - check birth/death date formats (death_date cannot be 'Unknown' for calculation)")
+        st.info("📊 No dead broods with valid life expectancy data yet")
         return
     
     # Show statistics FIRST (before the chart)
