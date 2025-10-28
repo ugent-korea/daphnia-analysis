@@ -3,7 +3,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
 from app.core import utils
-from app.ui import coder_page, analysis_page, test_connectivity
+from app.ui import coder_page, analysis_page, test_connectivity, monthly_reports
 
 APP_DIR = os.path.dirname(__file__)
 ICON_PATH = os.path.join(APP_DIR, "assets", "daphnia.svg")
@@ -23,6 +23,11 @@ DAPHNIA_PAGES = {
     "Daphnia Code Generator": coder_page,
     "Daphnia Analysis": analysis_page,
     # "Test Connectivity": test_connectivity,
+}
+
+# Monthly Reports Pages
+MONTHLY_REPORTS_PAGES = {
+    "September 2025": monthly_reports,
 }
 
 # MOINA_PAGES = {
@@ -62,6 +67,7 @@ with st.sidebar:
 if "selected_page" not in st.session_state:
     st.session_state.selected_page = "Daphnia Code Generator"
     st.session_state.selected_species = "daphnia"
+    st.session_state.selected_section = "main"  # "main" or "monthly"
 
 # ---- Daphnia section ----
 st.sidebar.markdown("### Daphnia magna")
@@ -72,10 +78,33 @@ for page_name in DAPHNIA_PAGES.keys():
         use_container_width=True,
         type="primary" if (
             st.session_state.selected_species == "daphnia"
+            and st.session_state.selected_section == "main"
             and st.session_state.selected_page == page_name
         ) else "secondary"
     ):
         st.session_state.selected_species = "daphnia"
+        st.session_state.selected_section = "main"
+        st.session_state.selected_page = page_name
+        st.rerun()
+
+# ---- Monthly Reports section ----
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📅 Monthly Reports")
+for page_name in MONTHLY_REPORTS_PAGES.keys():
+    # Indent with spaces for visual hierarchy
+    display_name = f"  └─ {page_name}"
+    if st.sidebar.button(
+        display_name,
+        key=f"monthly_{page_name}",
+        use_container_width=True,
+        type="primary" if (
+            st.session_state.selected_species == "daphnia"
+            and st.session_state.selected_section == "monthly"
+            and st.session_state.selected_page == page_name
+        ) else "secondary"
+    ):
+        st.session_state.selected_species = "daphnia"
+        st.session_state.selected_section = "monthly"
         st.session_state.selected_page = page_name
         st.rerun()
 
@@ -98,6 +127,9 @@ for page_name in DAPHNIA_PAGES.keys():
 
 # ---- Render selected page ----
 if st.session_state.selected_species == "daphnia":
-    DAPHNIA_PAGES[st.session_state.selected_page].render()
+    if st.session_state.selected_section == "main":
+        DAPHNIA_PAGES[st.session_state.selected_page].render()
+    elif st.session_state.selected_section == "monthly":
+        MONTHLY_REPORTS_PAGES[st.session_state.selected_page].render()
 # else:
 #     MOINA_PAGES[st.session_state.selected_page].render()
