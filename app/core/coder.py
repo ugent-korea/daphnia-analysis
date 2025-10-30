@@ -76,10 +76,10 @@ def _next_child_index(parent_core, child_ids):
                 idx.append(int(tail))
     return (max(idx) + 1) if idx else 1
 
-def _next_generation_for_set_cached(set_word: str) -> str:
+def _next_generation_for_set_cached(set_word: str) -> int:
     data = get_data()
     max_gen = data["set_max_gen"].get(set_word, 1)
-    return f"{set_word}.{max_gen + 1}"
+    return max_gen + 1
 
 def _alive_count_in_set(set_word: str) -> int:
     data = get_data()
