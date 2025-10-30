@@ -46,14 +46,10 @@ def get_children_ids(parent_full_id: str):
     return get_data()["children_by_origin"].get(parent_full_id, [])
 
 def is_mother_alive(parent_row: dict) -> bool:
-    """Check if a mother is alive based ONLY on status field.
-    
-    Alive = status matches 'alive' pattern (case-insensitive, whitespace-trimmed)
-    Dead = status matches 'dead' pattern (case-insensitive, whitespace-trimmed)
-    death_date field is ignored (can be NULL or 'Unknown')
-    """
+    """Check if a mother is alive based on status and death_date."""
     status = str(parent_row.get("status", "")).strip().lower()
-    return re.match(r'^alive$', status) is not None
+    death_date = str(parent_row.get("death_date", "")).strip()
+    return (status == "" or status not in ["dead", "deceased", "died"]) and death_date == ""
 
 def _parse_core(core: str):
     core = canonical_core(core)
@@ -80,19 +76,20 @@ def _next_child_index(parent_core, child_ids):
                 idx.append(int(tail))
     return (max(idx) + 1) if idx else 1
 
-def _next_generation_for_set_cached(set_word: str) -> str:
+def _next_generation_for_set_cached(set_word: str) -> int:
     data = get_data()
     max_gen = data["set_max_gen"].get(set_word, 1)
-    return f"{set_word}.{max_gen + 1}"
+    return max_gen + 1
 
 def _alive_count_in_set(set_word: str) -> int:
     data = get_data()
     cnt = 0
     for row in data["by_full"].values():
         if (row.get("set_label") or "").upper() == set_word.upper():
-            # Alive = status matches 'alive' pattern (case-insensitive)
+            # Alive = both status is empty/not dead AND death_date is empty
             status = str(row.get("status", "")).strip().lower()
-            is_alive = re.match(r'^alive$', status) is not None
+            death_date = str(row.get("death_date", "")).strip()
+            is_alive = (status == "" or status not in ["dead", "deceased", "died"]) and death_date == ""
             if is_alive:
                 cnt += 1
     return cnt
@@ -109,7 +106,13 @@ def compute_child_and_discard(parent_row, child_ids):
         suggested_core = f"{parent_core}.{next_idx}"
         return suggested_core, False, f"Founder {parent_core}: next brood={next_idx} (founders never discard/reset)."
 
-    # Non-founders: maximum 3 broods that extend path, then reset to new founder generations
+    # If path has 3+ segments (e.g., E.1.2.3.4), reset to new founder generation
+    if len(path) >= 3:
+        base_new_gen = _next_generation_for_set_cached(set_word)
+        new_core = f"{set_word}.{base_new_gen}"
+        return new_core, False, f"{parent_core}: path too deep (≥4 segments) → RESET to new founder generation {new_core}."
+
+    # Non-founders with path < 3: maximum 3 broods that extend path, then reset to new founder generations
     next_idx = _next_child_index(parent_core, child_ids)
 
     if next_idx == 1:
