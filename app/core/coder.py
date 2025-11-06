@@ -106,7 +106,13 @@ def compute_child_and_discard(parent_row, child_ids):
         suggested_core = f"{parent_core}.{next_idx}"
         return suggested_core, False, f"Founder {parent_core}: next brood={next_idx} (founders never discard/reset)."
 
-    # Non-founders: maximum 3 broods that extend path, then reset to new founder generations
+    # If path has 3+ segments (e.g., E.1.2.3.4), reset to new founder generation
+    if len(path) >= 3:
+        base_new_gen = _next_generation_for_set_cached(set_word)
+        new_core = f"{set_word}.{base_new_gen}"
+        return new_core, False, f"{parent_core}: path too deep (≥4 segments) → RESET to new founder generation {new_core}."
+
+    # Non-founders with path < 3: maximum 3 broods that extend path, then reset to new founder generations
     next_idx = _next_child_index(parent_core, child_ids)
 
     if next_idx == 1:

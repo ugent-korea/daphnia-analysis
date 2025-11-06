@@ -14,6 +14,9 @@ def render():
     except Exception as e:
         st.error(f"❌ Failed to load data: {e}")
         return
+    
+    # Check for invalid status entries and show warning
+    _render_invalid_status_warning()
 
     if records_df.empty:
         st.warning("⚠️ No records found in the database.")
@@ -62,6 +65,49 @@ def _load_and_validate_data():
     return broods_df, records_df, current_df
 
 
+def _render_invalid_status_warning():
+    """Display warning for invalid status entries."""
+    try:
+        data = database.get_data()
+        meta = data.get("meta", {})
+        invalid_status_raw = meta.get('invalid_status_entries')
+        
+        if invalid_status_raw:
+            try:
+                import ast
+                invalid_entries = ast.literal_eval(invalid_status_raw)
+                if invalid_entries:
+                    st.error(f"⚠️ **DATA QUALITY ALERT: {len(invalid_entries)} brood(s) have invalid status entries!**")
+                    
+                    with st.expander("📋 View Invalid Status Entries", expanded=False):
+                        st.warning(
+                            "**Status must be ONLY:** `Alive` or `Dead` (case-insensitive)\n\n"
+                            "**Invalid entries found:**"
+                        )
+                        
+                        # Group by assigned person
+                        from collections import defaultdict
+                        by_person = defaultdict(list)
+                        for entry in invalid_entries:
+                            person = entry.get('assigned_person', 'Unknown')
+                            by_person[person].append(entry)
+                        
+                        for person, entries in sorted(by_person.items()):
+                            st.markdown(f"**👤 {person}** ({len(entries)} entries)")
+                            for entry in entries:
+                                st.markdown(
+                                    f"- Mother ID: `{entry['mother_id']}` | "
+                                    f"Set: {entry['set_label']} | "
+                                    f"Invalid Status: `{entry['status']}`"
+                                )
+                        
+                        st.info("💡 **Action Required:** Update Google Sheets to use only 'Alive' or 'Dead', then run ETL refresh.")
+            except Exception as e:
+                st.error(f"Error parsing invalid status entries: {e}")
+    except Exception:
+        pass  # Silently skip if meta not available
+
+
 def _render_debug_panel(broods_df: pd.DataFrame, records_df: pd.DataFrame):
     """Render collapsible debug information panel."""
     with st.expander("🔧 Advanced Debug Info (Click to expand)", expanded=False):
@@ -107,9 +153,36 @@ def _get_all_sets_from_broods(broods_df: pd.DataFrame) -> list:
     return all_sets
 
 
+def _is_set_complete(broods_df: pd.DataFrame, current_df: pd.DataFrame, set_name: str) -> bool:
+    """Check if a set is complete (has no alive broods).
+    
+    A set is complete when it has no entries in the current table (no alive broods).
+    Returns True if the set has no alive broods.
+    """
+    if set_name == "Cumulative":
+        return False  # Cumulative view is never "complete"
+    
+    # Check if there are any alive broods for this set in current table
+    if current_df.empty:
+        return True  # No current data means complete
+    
+    set_current = current_df[current_df["set_label"] == set_name]
+    
+    return len(set_current) == 0  # Complete if no alive broods in current table
+
+
 def _render_analysis_tabs(df: pd.DataFrame, broods_df: pd.DataFrame, current_df: pd.DataFrame, all_sets: list):
     """Render tabs for cumulative and individual set analysis."""
-    tabs = st.tabs(["🌍 Cumulative"] + [f"Set {s}" for s in all_sets])
+    # Create tab labels with completion status
+    tab_labels = ["🌍 Cumulative"]
+    for s in all_sets:
+        is_complete = _is_set_complete(broods_df, current_df, s)
+        if is_complete:
+            tab_labels.append(f"Set {s} ✓")  # Checkmark for complete sets
+        else:
+            tab_labels.append(f"Set {s}")
+    
+    tabs = st.tabs(tab_labels)
 
     for i, tab in enumerate(tabs):
         with tab:
@@ -123,11 +196,18 @@ def _render_analysis_tabs(df: pd.DataFrame, broods_df: pd.DataFrame, current_df:
             else:
                 # Individual set tab
                 set_name = all_sets[i - 1]
+                is_complete = _is_set_complete(broods_df, current_df, set_name)
+                
                 df_sub = df[df["set_label"] == set_name]
                 current_sub = current_df[current_df["set_label"] == set_name] if not current_df.empty else pd.DataFrame()
                 assigned_person = _get_assigned_person(broods_df, set_name)
                 
                 st.markdown(f"### 🧬 Set {set_name} Overview")
+                
+                # Show completion status
+                if is_complete:
+                    st.success(f"✅ **Set {set_name} is COMPLETE** - All broods have finished their lifecycle")
+                
                 st.caption(f"👩 Assigned to: **{assigned_person}**")
                 
                 if df_sub.empty:
@@ -305,18 +385,16 @@ def _render_life_expectancy_distribution(df: pd.DataFrame, broods_df: pd.DataFra
     
     st.subheader("📊 Life Expectancy Distribution (Dead Broods)")
     
-    # Filter for dead broods (those with death_date)
+    # Filter for dead broods using regex pattern (case-insensitive, whitespace-trimmed)
     dead_broods = broods_df[
-        (broods_df["death_date"].notna()) & 
-        (broods_df["death_date"] != "") &
-        (broods_df["death_date"].str.strip() != "")
+        broods_df["status"].astype(str).str.strip().str.lower().str.match(r'^dead$', na=False)
     ].copy()
     
     if dead_broods.empty:
         st.info("📊 No dead broods found yet - life expectancy data will appear here once broods complete their lifecycle")
         return
     
-    # Parse birth and death dates
+    # Parse birth and death dates (death_date might be 'Unknown' or NULL)
     dead_broods["birth_date_parsed"] = dead_broods["birth_date"].apply(utils.parse_date_safe)
     dead_broods["death_date_parsed"] = dead_broods["death_date"].apply(utils.parse_date_safe)
     
@@ -325,14 +403,14 @@ def _render_life_expectancy_distribution(df: pd.DataFrame, broods_df: pd.DataFra
         dead_broods["death_date_parsed"] - dead_broods["birth_date_parsed"]
     ).dt.days
     
-    # Filter out invalid calculations
+    # Filter out invalid calculations (including Unknown death dates)
     dead_broods_valid = dead_broods[
         (dead_broods["life_expectancy_days"].notna()) &
         (dead_broods["life_expectancy_days"] >= 0)
     ].copy()
     
     if dead_broods_valid.empty:
-        st.warning("⚠️ Could not calculate life expectancy - check birth/death date formats")
+        st.info("📊 No dead broods with valid life expectancy data yet")
         return
     
     # Show statistics FIRST (before the chart)

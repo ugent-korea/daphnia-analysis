@@ -25,6 +25,40 @@ def render():
             f"Last refresh (KST): {last_refresh} • "
             f"Rows: {row_count} • Schema: {schema.capitalize()}"
         )
+        
+        # Check for invalid status entries and show prominent warning
+        invalid_status_raw = meta.get('invalid_status_entries')
+        if invalid_status_raw:
+            try:
+                import ast
+                invalid_entries = ast.literal_eval(invalid_status_raw)
+                if invalid_entries:
+                    st.error(f"⚠️ **DATA QUALITY ALERT: {len(invalid_entries)} brood(s) have invalid status entries!**")
+                    st.warning(
+                        "**Status must be ONLY:** `Alive` or `Dead` (case-insensitive)\n\n"
+                        "**Invalid entries found:**"
+                    )
+                    
+                    # Group by assigned person for easier fixing
+                    from collections import defaultdict
+                    by_person = defaultdict(list)
+                    for entry in invalid_entries:
+                        person = entry.get('assigned_person', 'Unknown')
+                        by_person[person].append(entry)
+                    
+                    for person, entries in sorted(by_person.items()):
+                        with st.expander(f"👤 **{person}** ({len(entries)} invalid entries)", expanded=True):
+                            for entry in entries:
+                                st.markdown(
+                                    f"- **Mother ID:** `{entry['mother_id']}` | "
+                                    f"**Set:** {entry['set_label']} | "
+                                    f"**Invalid Status:** `{entry['status']}`"
+                                )
+                    
+                    st.info("💡 **Action Required:** Please update the Google Sheets to use only 'Alive' or 'Dead' in the Status column, then run the ETL refresh.")
+            except Exception as e:
+                st.error(f"Error parsing invalid status entries: {e}")
+        
     except Exception as e:
         st.caption("Last refresh (KST): Error loading • Rows: ? • Schema: Broods")
         st.error(f"❌ Failed to load database metadata: {e}")
