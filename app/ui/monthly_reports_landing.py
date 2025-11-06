@@ -12,7 +12,8 @@ st.markdown("""
 Select a month from the sidebar to view detailed analysis.
 
 Currently available:
-- **September 2025** - Complete monthly analysis including demographics, mortality, reproduction, and survival metrics
+- **September 2025** - Complete monthly analysis including demographics, mortality, reproduction, egg production by set, and survival metrics
+- **October 2025** - Complete monthly analysis including demographics, mortality, reproduction, egg production by set, and survival metrics
 
 ### Coming Soon
 
@@ -24,4 +25,4 @@ Future updates will include:
 
 st.divider()
 
-st.info("👈 Select **September 2025** from the sidebar to view the detailed monthly report")
+st.info("👈 Select a month from the sidebar to view the detailed monthly report")

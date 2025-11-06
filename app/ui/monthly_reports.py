@@ -75,6 +75,7 @@ def _render_september_dashboard(sept_records: pd.DataFrame, sept_broods: pd.Data
         "Demographics",
         "Mortality Analysis",
         "Reproduction Metrics",
+        "Egg Production Analysis",
         "Life Stage & Reproduction Timing",
         "Survival Analysis"
     ])
@@ -92,9 +93,12 @@ def _render_september_dashboard(sept_records: pd.DataFrame, sept_broods: pd.Data
         _render_reproduction_section(sept_records, sept_broods)
 
     with tabs[4]:
-        _render_life_stage_and_reproduction_timing(sept_records)
+        _render_egg_production_section(sept_records, sept_broods)
 
     with tabs[5]:
+        _render_life_stage_and_reproduction_timing(sept_records)
+
+    with tabs[6]:
         _render_survival_analysis_section(all_broods_df)
 
 
@@ -132,60 +136,27 @@ def _render_summary(sept_records: pd.DataFrame, sept_broods: pd.DataFrame):
     at {demo['set_counts'][max(demo['set_counts'], key=demo['set_counts'].get)]:,} individuals.
     """)
 
-    # Mortality analysis
+    # Mortality analysis with percentages
     if mort:
         total_records = sum(stage['count'] for stage in mort.values())
         mort_rate = (total_deaths / total_records * 100) if total_records > 0 else 0
 
+        # Death percentages by stage
+        stage_death_pcts = {stage: data['percentage_of_total'] for stage, data in mort.items()}
+
         st.markdown(f"""
         **Mortality patterns** revealed a total of **{int(total_deaths)} deaths** across {total_records:,} observations, 
-        resulting in an overall mortality rate of **{mort_rate:.2f}%** for the month. Analysis of mortality causes 
-        identified multiple contributing factors distributed across different life stages and experimental conditions.
+        resulting in an overall mortality rate of **{mort_rate:.2f}%** for the month. Death distribution by life stage: 
+        Neonates ({stage_death_pcts.get('neonate', 0):.1f}%), Adolescents ({stage_death_pcts.get('adolescent', 0):.1f}%), 
+        Adults ({stage_death_pcts.get('adult', 0):.1f}%).
         """)
-
-        # Chi-square analysis
-        mort_records = sept_records[sept_records['mortality'] > 0].copy()
-        if not mort_records.empty:
-            all_causes = []
-            for _, row in mort_records.iterrows():
-                causes = str(row['cause_of_death']).split(',')
-                for cause in causes:
-                    cause = cause.strip().lower()
-                    if cause and cause not in ['', 'nan', 'none', 'unknown']:
-                        all_causes.append({
-                            'cause': cause,
-                            'life_stage': str(row['life_stage']).strip().lower(),
-                            'mortality': row['mortality']
-                        })
-
-            if all_causes:
-                causes_df = pd.DataFrame(all_causes)
-                causes_df.loc[causes_df['life_stage'] == 'adolescence', 'life_stage'] = 'adolescent'
-                pivot = causes_df.pivot_table(values='mortality', index='life_stage', columns='cause', aggfunc='sum', fill_value=0)
-
-                if pivot.shape[0] > 1 and pivot.shape[1] > 1:
-                    try:
-                        chi2, p_value, dof, _ = stats.chi2_contingency(pivot)
-                        if p_value < 0.05:
-                            st.info(f"""
-                            **Statistical Significance Detected**: Chi-square analysis (χ² = {chi2:.2f}, p = {p_value:.4f}) 
-                            revealed a statistically significant relationship between life stage and cause of death. 
-                            This indicates that certain mortality causes are more prevalent in specific developmental stages, 
-                            suggesting stage-specific vulnerabilities that warrant further investigation and targeted 
-                            intervention strategies.
-                            """)
-                    except:
-                        pass
-    else:
-        st.markdown("No mortality events were recorded during September 2025.")
 
     # Reproduction performance
     st.markdown(f"""
     **Reproductive performance** demonstrated an average brood size of **{repro['brood_size']['mean']:.1f} neonates**, 
     with individual broods ranging from {repro['brood_size']['min']} to {repro['brood_size']['max']} offspring. 
     A total of **{repro['brood_size']['total_neonates']:,} neonates** were produced across 
-    **{repro['total_broods']:,} broods**, averaging **{repro['broods_per_mother']['mean']:.1f} broods per mother**. 
-    The maximum reproductive output from a single mother was {repro['broods_per_mother']['max']} broods during this period.
+    **{repro['total_broods']:,} broods**, averaging **{repro['broods_per_mother']['mean']:.1f} broods per mother**.
     """)
 
     # Life stage transitions
@@ -193,33 +164,12 @@ def _render_summary(sept_records: pd.DataFrame, sept_broods: pd.DataFrame):
         st.markdown(f"""
         **Developmental timing** analysis revealed that individuals required an average of 
         **{trans['neonate_to_adult']['mean']:.1f} days** (median: {trans['neonate_to_adult']['median']:.1f} days) 
-        to complete the full developmental cycle from neonate to adult stage. This included 
-        **{trans['neonate_to_adolescent']['mean']:.1f} days** for the neonate-to-adolescent transition and 
-        **{trans['adolescent_to_adult']['mean']:.1f} days** for the adolescent-to-adult transition.
+        to complete the full developmental cycle from neonate to adult stage.
         """)
-
-    # Reproduction timing
-    if timing.get('adult_to_pregnant_by_set'):
-        all_atp = [data for set_data in timing['adult_to_pregnant_by_set'].values() for data in [set_data]]
-        if all_atp:
-            avg_atp = sum(d['mean'] for d in all_atp) / len(all_atp)
-            st.markdown(f"""
-            **Reproductive maturation** occurred approximately **{avg_atp:.1f} days** 
-            after reaching adult stage on average across all sets.
-            """)
-
-    if timing.get('gestation_by_set'):
-        all_gest = [data for set_data in timing['gestation_by_set'].values() for data in [set_data]]
-        if all_gest:
-            avg_gest = sum(d['mean'] for d in all_gest) / len(all_gest)
-            st.markdown(f"""
-            The **gestation period** (from egg development detection to release) averaged 
-            **{avg_gest:.1f} days** across all sets.
-            """)
 
     st.divider()
 
-    # Key findings callout
+    # Key findings
     st.success("""
     **Key Findings & Conclusions:**
     
@@ -230,16 +180,7 @@ def _render_summary(sept_records: pd.DataFrame, sept_broods: pd.DataFrame):
     • Reproductive performance meets expected parameters for Daphnia magna populations
     
     • Developmental timing is consistent with established Daphnia life cycle expectations
-    
-    • No critical anomalies detected that would warrant immediate experimental intervention
     """)
-
-    if trans.get('flagged_broods') and len(trans['flagged_broods']) > 0:
-        st.warning(f"""
-        **Data Quality Note**: {len(trans['flagged_broods'])} broods exhibited inconsistent life stage progression 
-        patterns and were excluded from developmental timing calculations. These anomalies may indicate 
-        recording errors or atypical developmental pathways requiring verification.
-        """)
 
 
 def _render_demographics_section(sept_records: pd.DataFrame, sept_broods: pd.DataFrame):
@@ -257,12 +198,12 @@ def _render_demographics_section(sept_records: pd.DataFrame, sept_broods: pd.Dat
 
     st.divider()
 
-    # Population by Set - BAR CHART (ALPHABETICAL ORDER)
+    # Population by Set - BAR CHART (ALPHABETICAL)
     st.markdown("### Population by Experimental Set")
 
     set_data = pd.DataFrame.from_dict(demo['set_counts'], orient='index', columns=['Population'])
     set_data = set_data.reset_index().rename(columns={'index': 'Set'})
-    set_data = set_data.sort_values('Set')  # ALPHABETICAL ORDER
+    set_data = set_data.sort_values('Set')
 
     chart = alt.Chart(set_data).mark_bar().encode(
         x=alt.X('Set:N', sort=list(set_data['Set']), title='Experimental Set'),
@@ -273,8 +214,9 @@ def _render_demographics_section(sept_records: pd.DataFrame, sept_broods: pd.Dat
 
     st.altair_chart(chart, use_container_width=True)
 
-    # Show data table
-    set_data['Percentage'] = (set_data['Population'] / set_data['Population'].sum() * 100).round(1)
+    # Show data table with percentages
+    total_pop = demo['total_records']
+    set_data['Percentage'] = (set_data['Population'] / total_pop * 100).round(1)
     st.dataframe(set_data, use_container_width=True, hide_index=True)
 
     st.divider()
@@ -295,10 +237,11 @@ def _render_demographics_section(sept_records: pd.DataFrame, sept_broods: pd.Dat
 
 
 def _render_mortality_section(sept_records: pd.DataFrame):
-    """Render mortality analysis with VISUALS."""
+    """Render mortality analysis with percentage breakdowns."""
     st.subheader("Mortality Analysis")
 
     mort = monthly_analytics.calculate_mortality_rates(sept_records)
+    mort_causes = monthly_analytics.analyze_mortality_causes_detailed(sept_records)
 
     if not mort:
         st.info("No mortality data for September 2025")
@@ -314,113 +257,97 @@ def _render_mortality_section(sept_records: pd.DataFrame):
 
     st.divider()
 
-    # Parse comma-separated causes of death
-    st.markdown("### Causes of Death")
+    # Death percentages by life stage
+    st.markdown("### Death Distribution by Life Stage")
 
-    mort_records = sept_records[sept_records['mortality'] > 0].copy()
+    stage_mort_data = []
+    for stage in ['neonate', 'adolescent', 'adult']:
+        if stage in mort:
+            stage_mort_data.append({
+                'Life Stage': stage.capitalize(),
+                'Deaths': int(mort[stage]['sum']),
+                '% of Total Deaths': mort[stage]['percentage_of_total'],
+                '% within Stage': mort[stage]['percentage_of_stage']
+            })
 
-    if mort_records.empty:
-        st.info("No mortality causes recorded")
-        return
+    stage_mort_df = pd.DataFrame(stage_mort_data)
+    st.dataframe(stage_mort_df, use_container_width=True, hide_index=True)
 
-    # Split comma-separated causes
-    all_causes = []
-    for _, row in mort_records.iterrows():
-        causes = str(row['cause_of_death']).split(',')
-        for cause in causes:
-            cause = cause.strip().lower()
-            if cause and cause not in ['', 'nan', 'none', 'unknown']:
-                all_causes.append({
-                    'cause': cause,
-                    'life_stage': str(row['life_stage']).strip().lower(),
-                    'set_label': row['set_label'],
-                    'mortality': row['mortality']
-                })
-
-    if not all_causes:
-        st.info("No valid causes of death recorded")
-        return
-
-    causes_df = pd.DataFrame(all_causes)
-    causes_df.loc[causes_df['life_stage'] == 'adolescence', 'life_stage'] = 'adolescent'
-
-    # Overall top causes - BAR CHART
-    st.markdown("#### Top Causes of Death (Overall)")
-    top_causes = causes_df.groupby('cause')['mortality'].sum().nlargest(10).reset_index()
-
-    chart = alt.Chart(top_causes).mark_bar().encode(
-        x=alt.X('cause:N', sort='-y', title='Cause of Death'),
-        y=alt.Y('mortality:Q', title='Deaths'),
-        color=alt.Color('cause:N', legend=None),
-        tooltip=['cause', 'mortality']
-    ).properties(height=400)
+    # Bar chart
+    chart = alt.Chart(stage_mort_df).mark_bar().encode(
+        x=alt.X('Life Stage:N', title='Life Stage'),
+        y=alt.Y('Deaths:Q', title='Total Deaths'),
+        color=alt.Color('Life Stage:N', legend=None),
+        tooltip=['Life Stage', 'Deaths', alt.Tooltip('% of Total Deaths:Q', format='.1f')]
+    ).properties(height=300)
 
     st.altair_chart(chart, use_container_width=True)
 
     st.divider()
 
-    # By Life Stage - STACKED BAR
-    st.markdown("#### Causes of Death by Life Stage")
+    # Causes of Death with percentages
+    if mort_causes.get('has_data'):
+        st.markdown("### Causes of Death Analysis")
 
-    stage_causes = causes_df.groupby(['life_stage', 'cause'])['mortality'].sum().reset_index()
+        # Overall percentages
+        st.markdown("#### Overall Cause Distribution")
 
-    chart = alt.Chart(stage_causes).mark_bar().encode(
-        x=alt.X('life_stage:N', title='Life Stage'),
-        y=alt.Y('mortality:Q', title='Deaths'),
-        color=alt.Color('cause:N', title='Cause'),
-        tooltip=['life_stage', 'cause', 'mortality']
-    ).properties(height=400)
+        overall_data = []
+        for cause, pct in sorted(mort_causes['overall_percentages'].items(), key=lambda x: -x[1]):
+            overall_data.append({
+                'Cause': cause,
+                'Percentage': pct
+            })
 
-    st.altair_chart(chart, use_container_width=True)
+        overall_df = pd.DataFrame(overall_data)
 
-    # Chi-square test
-    pivot = causes_df.pivot_table(values='mortality', index='life_stage', columns='cause', aggfunc='sum', fill_value=0)
-    if pivot.shape[0] > 1 and pivot.shape[1] > 1:
-        try:
-            chi2, p_value, dof, _ = stats.chi2_contingency(pivot)
-            st.markdown(f"**Statistical Test**: Chi-square = {chi2:.2f}, p-value = {p_value:.4f}")
-            if p_value < 0.05:
-                st.success("Significant relationship between life stage and cause of death detected (p < 0.05)")
-            else:
-                st.info("No significant relationship detected")
-        except:
-            pass
+        chart = alt.Chart(overall_df).mark_bar().encode(
+            x=alt.X('Cause:N', sort='-y', title='Cause of Death'),
+            y=alt.Y('Percentage:Q', title='% of Total Deaths'),
+            color=alt.Color('Cause:N', legend=None),
+            tooltip=['Cause', alt.Tooltip('Percentage:Q', format='.1f')]
+        ).properties(height=300)
 
-    st.divider()
+        st.altair_chart(chart, use_container_width=True)
 
-    # By Set - STACKED BAR (ALPHABETICAL ORDER)
-    st.markdown("#### Causes of Death by Experimental Set")
+        st.divider()
 
-    set_causes = causes_df.groupby(['set_label', 'cause'])['mortality'].sum().reset_index()
-    set_causes = set_causes.sort_values('set_label')  # ALPHABETICAL
+        # By life stage with percentages
+        st.markdown("#### Causes by Life Stage (with percentages)")
 
-    chart = alt.Chart(set_causes).mark_bar().encode(
-        x=alt.X('set_label:N', sort=list(set_causes['set_label'].unique()), title='Set'),
-        y=alt.Y('mortality:Q', title='Deaths'),
-        color=alt.Color('cause:N', title='Cause'),
-        tooltip=['set_label', 'cause', 'mortality']
-    ).properties(height=400)
+        for stage, stage_data in mort_causes['by_life_stage'].items():
+            with st.expander(f"{stage.capitalize()} - {stage_data['percentage_of_all_deaths']:.1f}% of all deaths"):
+                stage_cause_data = []
+                for cause, pct in sorted(stage_data['percentages'].items(), key=lambda x: -x[1]):
+                    stage_cause_data.append({
+                        'Cause': cause,
+                        '% within Stage': pct,
+                        'Count': stage_data['counts'][cause]
+                    })
 
-    st.altair_chart(chart, use_container_width=True)
+                st.dataframe(pd.DataFrame(stage_cause_data), use_container_width=True, hide_index=True)
 
-    st.divider()
+        st.divider()
 
-    # Cumulative - PIE CHART
-    st.markdown("#### Cumulative Cause Distribution")
+        # By set with percentages
+        st.markdown("#### Causes by Experimental Set (with percentages)")
 
-    cumulative = causes_df.groupby('cause')['mortality'].sum().reset_index()
+        for set_label in sorted(mort_causes['by_set'].keys()):
+            set_data = mort_causes['by_set'][set_label]
+            with st.expander(f"{set_label} - {set_data['percentage_of_all_deaths']:.1f}% of all deaths"):
+                set_cause_data = []
+                for cause, pct in sorted(set_data['percentages'].items(), key=lambda x: -x[1]):
+                    set_cause_data.append({
+                        'Cause': cause,
+                        '% within Set': pct,
+                        'Count': set_data['counts'][cause]
+                    })
 
-    chart = alt.Chart(cumulative).mark_arc(innerRadius=80).encode(
-        theta=alt.Theta('mortality:Q', title='Deaths'),
-        color=alt.Color('cause:N', title='Cause'),
-        tooltip=['cause', 'mortality']
-    ).properties(height=400)
-
-    st.altair_chart(chart, use_container_width=True)
+                st.dataframe(pd.DataFrame(set_cause_data), use_container_width=True, hide_index=True)
 
 
 def _render_reproduction_section(sept_records: pd.DataFrame, sept_broods: pd.DataFrame):
-    """Render reproduction metrics with VISUALS."""
+    """Render reproduction metrics."""
     st.subheader("Reproduction Metrics")
 
     repro = monthly_analytics.calculate_reproduction_metrics(sept_records, sept_broods)
@@ -434,7 +361,7 @@ def _render_reproduction_section(sept_records: pd.DataFrame, sept_broods: pd.Dat
 
     st.divider()
 
-    # Brood size distribution - HISTOGRAM
+    # Brood size distribution
     st.markdown("### Brood Size Distribution")
 
     brood_sizes = sept_broods[['n_i']].dropna()
@@ -447,17 +374,15 @@ def _render_reproduction_section(sept_records: pd.DataFrame, sept_broods: pd.Dat
         ).properties(height=400)
 
         st.altair_chart(chart, use_container_width=True)
-    else:
-        st.info("No brood size data available")
 
     st.divider()
 
-    # Average brood size by set - BAR CHART (ALPHABETICAL ORDER)
+    # Average brood size by set
     st.markdown("### Average Brood Size by Experimental Set")
 
     avg_by_set = sept_broods.groupby('set_label')['n_i'].mean().reset_index()
     avg_by_set.columns = ['Set', 'Average Brood Size']
-    avg_by_set = avg_by_set.sort_values('Set')  # ALPHABETICAL
+    avg_by_set = avg_by_set.sort_values('Set')
 
     if not avg_by_set.empty:
         chart = alt.Chart(avg_by_set).mark_bar().encode(
@@ -469,24 +394,140 @@ def _render_reproduction_section(sept_records: pd.DataFrame, sept_broods: pd.Dat
 
         st.altair_chart(chart, use_container_width=True)
         st.dataframe(avg_by_set, use_container_width=True, hide_index=True)
-    else:
-        st.info("No set-level brood size data available")
+
+
+def _render_egg_production_section(sept_records: pd.DataFrame, sept_broods: pd.DataFrame):
+    """Render egg production analysis by life stage and experimental set."""
+    st.subheader("Egg Production by Life Stage")
+    st.caption("Analysis of which stage (adolescent vs adult) produces eggs, calculated per child brood birth date")
+
+    egg_prod = monthly_analytics.calculate_egg_production_by_stage(sept_records, sept_broods)
+
+    if not egg_prod.get('has_data'):
+        st.info("Insufficient data for egg production analysis")
+        return
+
+    # Overall statistics
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Broods Analyzed", egg_prod['total_broods'])
+
+    adolescent_pct = egg_prod['stage_percentages'].get('adolescent', 0)
+    adult_pct = egg_prod['stage_percentages'].get('adult', 0)
+
+    col2.metric("Adolescent Production", f"{adolescent_pct:.1f}%")
+    col3.metric("Adult Production", f"{adult_pct:.1f}%")
 
     st.divider()
 
-    # Summary statistics table
-    st.markdown("### Summary Statistics")
-    stats_df = pd.DataFrame({
-        'Metric': ['Mean', 'Median', 'Min', 'Max', 'Total Neonates'],
-        'Value': [
-            f"{repro['brood_size']['mean']:.1f}",
-            f"{repro['brood_size']['median']:.1f}",
-            repro['brood_size']['min'],
-            repro['brood_size']['max'],
-            repro['brood_size']['total_neonates']
-        ]
-    })
-    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+    # Overall distribution - PIE CHART
+    st.markdown("### Overall Stage Distribution")
+
+    stage_data = []
+    for stage, count in egg_prod['stage_counts'].items():
+        stage_data.append({
+            'Stage': stage.capitalize(),
+            'Count': count,
+            'Percentage': egg_prod['stage_percentages'][stage]
+        })
+
+    stage_df = pd.DataFrame(stage_data)
+
+    chart = alt.Chart(stage_df).mark_arc(innerRadius=80).encode(
+        theta=alt.Theta('Count:Q', title='Count'),
+        color=alt.Color('Stage:N', title='Life Stage'),
+        tooltip=['Stage', 'Count', alt.Tooltip('Percentage:Q', format='.1f')]
+    ).properties(height=400)
+
+    st.altair_chart(chart, use_container_width=True)
+
+    st.divider()
+
+    # By set breakdown - PROMINENTLY DISPLAYED
+    st.markdown("### Egg Production by Experimental Set")
+    st.caption("Comparison of adolescent vs adult egg production across all experimental sets")
+
+    # Create comprehensive table for all sets
+    set_comparison_data = []
+    for set_label in sorted(egg_prod['by_set'].keys()):
+        set_data = egg_prod['by_set'][set_label]
+        
+        set_comparison_data.append({
+            'Set': set_label,
+            'Total Broods': set_data['total'],
+            'Adolescent Count': set_data['counts'].get('adolescent', 0),
+            'Adolescent %': set_data['percentages'].get('adolescent', 0),
+            'Adult Count': set_data['counts'].get('adult', 0),
+            'Adult %': set_data['percentages'].get('adult', 0)
+        })
+
+    set_comparison_df = pd.DataFrame(set_comparison_data)
+    
+    # Display summary table
+    st.dataframe(
+        set_comparison_df.style.format({
+            'Adolescent %': '{:.1f}%',
+            'Adult %': '{:.1f}%'
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.divider()
+
+    # Stacked bar chart by set
+    st.markdown("#### Visual Comparison Across Sets")
+    
+    set_viz_data = []
+    for set_label in sorted(egg_prod['by_set'].keys()):
+        set_data = egg_prod['by_set'][set_label]
+        for stage, count in set_data['counts'].items():
+            set_viz_data.append({
+                'Set': set_label,
+                'Stage': stage.capitalize(),
+                'Count': count,
+                'Percentage': set_data['percentages'][stage]
+            })
+    
+    set_viz_df = pd.DataFrame(set_viz_data)
+    
+    # Stacked bar chart
+    chart = alt.Chart(set_viz_df).mark_bar().encode(
+        x=alt.X('Set:N', sort=list(sorted(egg_prod['by_set'].keys())), title='Experimental Set'),
+        y=alt.Y('Percentage:Q', title='Percentage of Broods', stack='normalize'),
+        color=alt.Color('Stage:N', title='Life Stage'),
+        tooltip=['Set', 'Stage', 'Count', alt.Tooltip('Percentage:Q', format='.1f')]
+    ).properties(height=400)
+    
+    st.altair_chart(chart, use_container_width=True)
+
+    st.divider()
+
+    # Detailed breakdown per set (expandable)
+    st.markdown("#### Detailed Breakdown by Set")
+
+    for set_label in sorted(egg_prod['by_set'].keys()):
+        set_data = egg_prod['by_set'][set_label]
+
+        with st.expander(f"{set_label} - {set_data['total']} broods"):
+            set_stage_data = []
+            for stage, count in set_data['counts'].items():
+                set_stage_data.append({
+                    'Stage': stage.capitalize(),
+                    'Count': count,
+                    'Percentage': set_data['percentages'][stage]
+                })
+
+            set_stage_df = pd.DataFrame(set_stage_data)
+
+            chart = alt.Chart(set_stage_df).mark_bar().encode(
+                x=alt.X('Stage:N', title='Life Stage'),
+                y=alt.Y('Percentage:Q', title='% of Broods'),
+                color=alt.Color('Stage:N', legend=None),
+                tooltip=['Stage', 'Count', alt.Tooltip('Percentage:Q', format='.1f')]
+            ).properties(height=250)
+
+            st.altair_chart(chart, use_container_width=True)
+            st.dataframe(set_stage_df, use_container_width=True, hide_index=True)
 
 
 def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
@@ -496,10 +537,9 @@ def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
     trans = monthly_analytics.calculate_life_stage_transitions(sept_records)
     timing = monthly_analytics.calculate_reproduction_timing_v2(sept_records)
 
-    # Life stage transitions - FLOW FORMAT
+    # Life stage transitions
     st.markdown("### Developmental Timeline")
 
-    # Top: Neonate to Adult total
     if trans.get('neonate_to_adult'):
         st.metric("Complete Development (Neonate to Adult)",
                  f"{trans['neonate_to_adult']['mean']:.1f} days (median: {trans['neonate_to_adult']['median']:.1f})")
@@ -507,7 +547,6 @@ def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
 
     st.markdown("---")
 
-    # Flow: Neonate -> metrics -> Adolescent -> metrics -> Adult
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
@@ -519,8 +558,6 @@ def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
             st.markdown(f"**{data['mean']:.1f} days**")
             st.caption(f"median: {data['median']:.1f}")
             st.caption(f"n={data['count']}")
-        else:
-            st.markdown("No data")
 
     with col3:
         st.markdown("**Adolescent**")
@@ -531,20 +568,9 @@ def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
             st.markdown(f"**{data['mean']:.1f} days**")
             st.caption(f"median: {data['median']:.1f}")
             st.caption(f"n={data['count']}")
-        else:
-            st.markdown("No data")
 
     with col5:
         st.markdown("**Adult**")
-
-    st.divider()
-
-    # Flagged broods
-    if trans.get('flagged_broods') and len(trans['flagged_broods']) > 0:
-        st.warning(f"{len(trans['flagged_broods'])} broods flagged for inconsistent transitions")
-        with st.expander("View Flagged Broods"):
-            flagged_df = pd.DataFrame(trans['flagged_broods'])
-            st.dataframe(flagged_df, use_container_width=True, hide_index=True)
 
     st.divider()
 
@@ -558,7 +584,7 @@ def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
 
     if atp_by_set:
         atp_data = []
-        for set_label in sorted(atp_by_set.keys()):  # ALPHABETICAL
+        for set_label in sorted(atp_by_set.keys()):
             data = atp_by_set[set_label]
             atp_data.append({
                 'Set': set_label,
@@ -571,7 +597,6 @@ def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
 
         atp_df = pd.DataFrame(atp_data)
 
-        # Bar chart
         chart = alt.Chart(atp_df).mark_bar().encode(
             x=alt.X('Set:N', sort=list(atp_df['Set']), title='Experimental Set'),
             y=alt.Y('Mean (days):Q', title='Mean Days to Pregnancy'),
@@ -581,20 +606,17 @@ def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
 
         st.altair_chart(chart, use_container_width=True)
         st.dataframe(atp_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No pregnancy timing data available")
 
     st.divider()
 
     # Gestation Period by Set
     st.markdown("#### Gestation Period by Set")
-    st.caption("Methodology: Time from egg_development='yes' to first egg_development='no' for each mother")
 
     gest_by_set = timing.get('gestation_by_set', {})
 
     if gest_by_set:
         gest_data = []
-        for set_label in sorted(gest_by_set.keys()):  # ALPHABETICAL
+        for set_label in sorted(gest_by_set.keys()):
             data = gest_by_set[set_label]
             gest_data.append({
                 'Set': set_label,
@@ -607,7 +629,6 @@ def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
 
         gest_df = pd.DataFrame(gest_data)
 
-        # Bar chart
         chart = alt.Chart(gest_df).mark_bar().encode(
             x=alt.X('Set:N', sort=list(gest_df['Set']), title='Experimental Set'),
             y=alt.Y('Mean (days):Q', title='Mean Gestation Period (days)'),
@@ -617,16 +638,15 @@ def _render_life_stage_and_reproduction_timing(sept_records: pd.DataFrame):
 
         st.altair_chart(chart, use_container_width=True)
         st.dataframe(gest_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No gestation data available")
 
 
 def _render_survival_analysis_section(all_broods_df: pd.DataFrame):
-    """Render survival analysis."""
-    st.subheader("Survival Analysis")
-    st.caption("Kaplan-Meier survival curves by experimental set")
+    """Render survival analysis with outlier removal and 0-max scale."""
+    st.subheader("Survival Analysis (Life Expectancy)")
+    st.caption("Kaplan-Meier survival curves by experimental set with outlier removal")
 
-    survival_data = monthly_analytics.prepare_survival_data(all_broods_df)
+    # Prepare survival data WITH outlier removal
+    survival_data = monthly_analytics.prepare_survival_data(all_broods_df, remove_outliers=True)
 
     if survival_data.empty:
         st.info("Insufficient data for survival analysis")
@@ -643,22 +663,24 @@ def _render_survival_analysis_section(all_broods_df: pd.DataFrame):
 
     st.divider()
 
-    # Mean survival time - ALL BROODS
-    st.markdown("### Mean Survival Time")
+    # Mean survival time
+    st.markdown("### Mean Life Expectancy (Dead Broods Only)")
 
     dead_only = survival_data[survival_data['event'] == 1]['survival_days']
     if not dead_only.empty:
         mean_all = dead_only.mean()
         median_all = dead_only.median()
+        max_survival = dead_only.max()
 
-        col1, col2 = st.columns(2)
-        col1.metric("Mean (All Broods)", f"{mean_all:.1f} days")
-        col2.metric("Median (All Broods)", f"{median_all:.1f} days")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Mean", f"{mean_all:.1f} days")
+        col2.metric("Median", f"{median_all:.1f} days")
+        col3.metric("Max", f"{int(max_survival)} days")
 
         st.divider()
 
-        # Mean survival by set - BAR CHART (ALPHABETICAL ORDER)
-        st.markdown("#### Mean Survival Time by Experimental Set")
+        # Mean survival by set
+        st.markdown("#### Mean Life Expectancy by Experimental Set")
 
         set_survival = []
         for set_label in sorted(survival_data['set_label'].unique()):
@@ -668,8 +690,8 @@ def _render_survival_analysis_section(all_broods_df: pd.DataFrame):
             if not dead_set.empty:
                 set_survival.append({
                     'Set': set_label,
-                    'Mean Survival (days)': dead_set.mean(),
-                    'Median Survival (days)': dead_set.median(),
+                    'Mean (days)': dead_set.mean(),
+                    'Median (days)': dead_set.median(),
                     'Count': len(dead_set)
                 })
 
@@ -678,32 +700,37 @@ def _render_survival_analysis_section(all_broods_df: pd.DataFrame):
 
             chart = alt.Chart(set_survival_df).mark_bar().encode(
                 x=alt.X('Set:N', sort=list(set_survival_df['Set']), title='Experimental Set'),
-                y=alt.Y('Mean Survival (days):Q', title='Mean Survival (days)'),
+                y=alt.Y('Mean (days):Q', title='Mean Life Expectancy (days)'),
                 color=alt.Color('Set:N', legend=None),
-                tooltip=['Set', alt.Tooltip('Mean Survival (days):Q', format='.1f'), 'Count']
+                tooltip=['Set', alt.Tooltip('Mean (days):Q', format='.1f'), 'Count']
             ).properties(height=400)
 
             st.altair_chart(chart, use_container_width=True)
             st.dataframe(set_survival_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No deaths recorded yet")
 
     st.divider()
 
-    st.markdown("### Survival Curves")
+    # Survival curves with 0-max scale
+    st.markdown("### Survival Curves (0 to Max Days)")
 
     try:
+        # Overall curve
         overall_curve = _calculate_simple_survival_curve(survival_data)
         if not overall_curve.empty:
+            max_days = int(survival_data['survival_days'].max())
+
             chart = alt.Chart(overall_curve).mark_line(color='#1f77b4', strokeWidth=2).encode(
-                x=alt.X('days:Q', title='Days'),
+                x=alt.X('days:Q', title='Days', scale=alt.Scale(domain=[0, max_days])),
                 y=alt.Y('survival_rate:Q', title='Survival Rate', scale=alt.Scale(domain=[0, 1])),
                 tooltip=['days', alt.Tooltip('survival_rate:Q', format='.2%')]
             ).properties(height=300, title='All Broods Combined')
+
             st.altair_chart(chart, use_container_width=True)
 
+        # By set
         sets = sorted(survival_data['set_label'].unique())
         curves_by_set = []
+
         for set_label in sets:
             set_data = survival_data[survival_data['set_label'] == set_label]
             curve = _calculate_simple_survival_curve(set_data)
@@ -713,9 +740,10 @@ def _render_survival_analysis_section(all_broods_df: pd.DataFrame):
 
         if curves_by_set:
             all_curves = pd.concat(curves_by_set, ignore_index=True)
+            max_days = int(survival_data['survival_days'].max())
 
             chart = alt.Chart(all_curves).mark_line(strokeWidth=2).encode(
-                x=alt.X('days:Q', title='Days'),
+                x=alt.X('days:Q', title='Days', scale=alt.Scale(domain=[0, max_days])),
                 y=alt.Y('survival_rate:Q', title='Survival Rate', scale=alt.Scale(domain=[0, 1])),
                 color=alt.Color('set_label:N', title='Set'),
                 tooltip=['set_label', 'days', alt.Tooltip('survival_rate:Q', format='.2%')]

@@ -3,7 +3,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
 from app.core import utils
-from app.ui import coder_page, analysis_page, test_connectivity, monthly_reports
+from app.ui import coder_page, analysis_page, test_connectivity, monthly_reports, monthly_reports_october
 
 APP_DIR = os.path.dirname(__file__)
 ICON_PATH = os.path.join(APP_DIR, "assets", "daphnia.svg")
@@ -28,6 +28,7 @@ DAPHNIA_PAGES = {
 # Monthly Reports Pages
 MONTHLY_REPORTS_PAGES = {
     "September 2025": monthly_reports,
+    "October 2025": monthly_reports_october,
 }
 
 # MOINA_PAGES = {
@@ -92,7 +93,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### 📅 Monthly Reports")
 for page_name in MONTHLY_REPORTS_PAGES.keys():
     # Indent with spaces for visual hierarchy
-    display_name = f"  └─ {page_name}"
+    display_name = f"   {page_name}"
     if st.sidebar.button(
         display_name,
         key=f"monthly_{page_name}",
