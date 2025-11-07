@@ -187,12 +187,12 @@ def _render_summary(oct_records: pd.DataFrame, oct_broods: pd.DataFrame):
     # Key findings
     st.success("""
     **Key Findings & Conclusions:**
-    
+
     • Population health appears stable with consistent reproduction across all experimental sets
-    
+
     • Mortality patterns show stage-specific vulnerabilities requiring targeted monitoring
-    
-    • Reproductive performance meets expected parameters for Daphnia magna populations
-    
+
+    • Reproductive performance meets expected parameters for *Daphnia magna* populations
+
     • Developmental timing is consistent with established Daphnia life cycle expectations
     """)

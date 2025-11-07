@@ -172,13 +172,13 @@ def _render_summary(sept_records: pd.DataFrame, sept_broods: pd.DataFrame):
     # Key findings
     st.success("""
     **Key Findings & Conclusions:**
-    
+
     • Population health appears stable with consistent reproduction across all experimental sets
-    
+
     • Mortality patterns show stage-specific vulnerabilities requiring targeted monitoring
-    
-    • Reproductive performance meets expected parameters for Daphnia magna populations
-    
+
+    • Reproductive performance meets expected parameters for *Daphnia magna* populations
+
     • Developmental timing is consistent with established Daphnia life cycle expectations
     """)
 
@@ -450,7 +450,7 @@ def _render_egg_production_section(sept_records: pd.DataFrame, sept_broods: pd.D
     set_comparison_data = []
     for set_label in sorted(egg_prod['by_set'].keys()):
         set_data = egg_prod['by_set'][set_label]
-        
+
         set_comparison_data.append({
             'Set': set_label,
             'Total Broods': set_data['total'],
@@ -461,7 +461,7 @@ def _render_egg_production_section(sept_records: pd.DataFrame, sept_broods: pd.D
         })
 
     set_comparison_df = pd.DataFrame(set_comparison_data)
-    
+
     # Display summary table
     st.dataframe(
         set_comparison_df.style.format({
@@ -476,7 +476,7 @@ def _render_egg_production_section(sept_records: pd.DataFrame, sept_broods: pd.D
 
     # Stacked bar chart by set
     st.markdown("#### Visual Comparison Across Sets")
-    
+
     set_viz_data = []
     for set_label in sorted(egg_prod['by_set'].keys()):
         set_data = egg_prod['by_set'][set_label]
@@ -487,9 +487,9 @@ def _render_egg_production_section(sept_records: pd.DataFrame, sept_broods: pd.D
                 'Count': count,
                 'Percentage': set_data['percentages'][stage]
             })
-    
+
     set_viz_df = pd.DataFrame(set_viz_data)
-    
+
     # Stacked bar chart
     chart = alt.Chart(set_viz_df).mark_bar().encode(
         x=alt.X('Set:N', sort=list(sorted(egg_prod['by_set'].keys())), title='Experimental Set'),
@@ -497,7 +497,7 @@ def _render_egg_production_section(sept_records: pd.DataFrame, sept_broods: pd.D
         color=alt.Color('Stage:N', title='Life Stage'),
         tooltip=['Set', 'Stage', 'Count', alt.Tooltip('Percentage:Q', format='.1f')]
     ).properties(height=400)
-    
+
     st.altair_chart(chart, use_container_width=True)
 
     st.divider()

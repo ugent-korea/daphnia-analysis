@@ -71,7 +71,7 @@ if "selected_page" not in st.session_state:
     st.session_state.selected_section = "main"  # "main" or "monthly"
 
 # ---- Daphnia section ----
-st.sidebar.markdown("### Daphnia magna")
+st.sidebar.markdown("### *Daphnia magna*")
 for page_name in DAPHNIA_PAGES.keys():
     if st.sidebar.button(
         page_name,
