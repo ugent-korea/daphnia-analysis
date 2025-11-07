@@ -501,5 +501,5 @@ This project is licensed under the **MIT License** - see the [LICENSE.md](LICENS
 
 ---
 
-<p align="center"><img src="app/assets/Best_Labs.png" alt="BEST Labs" width="140"/></p>
+<p align="center"><img src="app/assets/best_labs.png" alt="BEST Labs" width="140"/></p>
 
