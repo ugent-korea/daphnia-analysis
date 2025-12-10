@@ -3,7 +3,13 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
 from app.core import utils
-from app.ui import coder_page, analysis_page, test_connectivity, monthly_reports, monthly_reports_october
+from app.ui import (
+    coder_page, 
+    analysis_page, 
+    test_connectivity, 
+    montly_reports_automation,
+    monthly_reports_landing
+)
 
 APP_DIR = os.path.dirname(__file__)
 ICON_PATH = os.path.join(APP_DIR, "assets", "daphnia.svg")
@@ -25,10 +31,10 @@ DAPHNIA_PAGES = {
     # "Test Connectivity": test_connectivity,
 }
 
-# Monthly Reports Pages
+# Monthly Reports Pages - Using the automation page
 MONTHLY_REPORTS_PAGES = {
-    "September 2025": monthly_reports,
-    "October 2025": monthly_reports_october,
+    "📊 Monthly Reports": montly_reports_automation,  # Single entry point for all months
+    # "About Reports": monthly_reports_landing,
 }
 
 # MOINA_PAGES = {
@@ -52,7 +58,7 @@ with st.sidebar:
                 display: block;
             }
 
-            /* Optional: remove rounded white “card” feel if any wrapper adds it */
+            /* Optional: remove rounded white "card" feel if any wrapper adds it */
             section[data-testid="stSidebar"] [data-testid="stImage"] {
                 margin-top: 0 !important;
             }
@@ -92,10 +98,8 @@ for page_name in DAPHNIA_PAGES.keys():
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📅 Monthly Reports")
 for page_name in MONTHLY_REPORTS_PAGES.keys():
-    # Indent with spaces for visual hierarchy
-    display_name = f"   {page_name}"
     if st.sidebar.button(
-        display_name,
+        page_name,
         key=f"monthly_{page_name}",
         use_container_width=True,
         type="primary" if (
